@@ -1,4 +1,5 @@
 'use strict';
+require('dotenv').config(); // Load environment variables dari file .env
 
 const TelegramBot                 = require('node-telegram-bot-api');
 const axios                       = require('axios');
@@ -16,9 +17,9 @@ process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
-  BOT_TOKEN:        process.env.BOT_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN',
+  BOT_TOKEN:        process.env.BOT_TOKEN,
   ALLOWED_USER_IDS: [], // kosong = semua
-  XAPIVERSE_KEY:    process.env.XAPIVERSE_KEY || 'YOUR_XAPIVERSE_KEY',
+  XAPIVERSE_KEY:    process.env.XAPIVERSE_KEY,
   XAPIVERSE_URL:    'https://xapiverse.com/api/terabox-pro',
   TEMP_DIR:         './tmp_downloads',
   IMAGE_EXTS:       ['.jpg', '.jpeg', '.png', '.webp', '.gif'],

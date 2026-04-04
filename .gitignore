@@ -2,3 +2,4 @@ node_modules/
 tmp_downloads/
 .env
 .DS_Store
+browser_profile_gofile/

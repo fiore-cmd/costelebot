@@ -40,7 +40,12 @@ async function doR34Gacha(bot, chatId, statusCallback) {
              await statusCallback(`🛡️ <b>Anti-Bot:</b> Memutar IP TheSpeedX [${retry}/5]\nMenyamar lewat <code>${pxIp.substring(0, 15)}...</code>`);
              try {
                  const agent = new HttpsProxyAgent('http://' + pxIp);
-                 resList = await axios.get(listUrl, { headers: r34Headers, httpsAgent: agent, timeout: 4000 });
+                 const controller = new AbortController();
+                 const timeoutId = setTimeout(() => controller.abort(), 4000);
+                 
+                 resList = await axios.get(listUrl, { headers: r34Headers, httpsAgent: agent, signal: controller.signal });
+                 clearTimeout(timeoutId);
+                 
                  proxySuccess = true;
                  successfulProxyAgent = agent;
                  break;
@@ -73,11 +78,14 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      // 3. Masuk ke halaman detail untuk mencuri link media asli
      let resDetail;
      try {
+         const detailController = new AbortController();
+         const detailTimeout = setTimeout(() => detailController.abort(), 6000);
          resDetail = await axios.get(randomPostUrl, { 
              headers: r34Headers, 
-             timeout: 5000, 
-             httpsAgent: successfulProxyAgent 
+             httpsAgent: successfulProxyAgent,
+             signal: detailController.signal
          });
+         clearTimeout(detailTimeout);
      } catch (e) {
          return statusCallback('⚠️ Koneksi terputus saat mengambil detail postingan lewat Proxy.');
      }
@@ -107,12 +115,15 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      // Download sebagai stream untuk dikirim agar tidak ditolak Telegram "failed to get HTTP URL"
      let streamRes;
      try {
+         const streamController = new AbortController();
+         const streamTimeout = setTimeout(() => streamController.abort(), 12000); // 12 detik max transfer awal stream
          streamRes = await axios.get(finalMedia, { 
              responseType: 'stream', 
              headers: r34Headers,
              httpsAgent: successfulProxyAgent,
-             timeout: 15000 // Beri waktu download agak panjang karena proxy kadang lamban
+             signal: streamController.signal
          });
+         clearTimeout(streamTimeout);
      } catch (e) {
          return statusCallback('⚠️ Gagal mendownload media stream dari Proxy (Media Terlalu Besar / Proxy Mati). Silakan Reroll.');
      }

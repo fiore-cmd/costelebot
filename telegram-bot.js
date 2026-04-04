@@ -104,9 +104,10 @@ async function sanitizeMediasForTelegram(medias, statusCallback) {
            const fStats = fs.statSync(mPath);
            const meta = await sharp(mPath).metadata();
            const sumDim = meta.width + meta.height;
+            const ratio = Math.max(meta.width, meta.height) / Math.min(meta.width, meta.height);
            
            // Jika file tembus >9MB atau resolusi kepanjangan, KOMPRES!
-           if (fStats.size > 9 * 1024 * 1024 || sumDim > 9000) {
+           if (fStats.size > 9 * 1024 * 1024 || sumDim > 9000 || ratio > 19) {
                if (!needStatus) {
                    await statusCallback(`🗜️ <b>Sistem Cerdas Bekerja</b>: Terdapat beberapa foto 4K Raksasa! Mengkompres ukurannya sesaat...`);
                    needStatus = true;
@@ -118,6 +119,12 @@ async function sanitizeMediasForTelegram(medias, statusCallback) {
                // Resize jika rasio konyol
                if (meta.width > 4200) s = s.resize({ width: 4200 });
                else if (sumDim > 9000 && meta.height > 4200) s = s.resize({ height: 4200 });
+                
+                if (ratio > 19) {
+                   const safeWidth = meta.width > meta.height ? Math.min(meta.width, Math.floor(meta.height * 18)) : undefined;
+                   const safeHeight = meta.height > meta.width ? Math.min(meta.height, Math.floor(meta.width * 18)) : undefined;
+                   s = s.resize({ width: safeWidth, height: safeHeight, fit: 'cover', position: 'top' });
+                }
                
                // Kompres ke persentase aman ~80%
                await s.jpeg({ quality: 80 }).toFile(outPath);

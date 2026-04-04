@@ -39,7 +39,7 @@ npm install
 ### 3. Setup Konfigurasi Kunci (Environment Variables)
 Anda WAJIB memberikan asupan "Kunci API" rahasia sebelum bot dijalankan. Buatlah file rahasia bernama `.env` di luar folder (sejajar dengan package.json).
 ```env
-BOT_TOKEN=8xxxxxxx:AAFz...                       # Token Telegram Bot Bapak 
+BOT_TOKEN=8xxxxxxx:AAFz...                       # Token Telegram Bot
 XAPIVERSE_KEY=sk_882fd19...                      # Token Terabox Resolver 
 ```
 

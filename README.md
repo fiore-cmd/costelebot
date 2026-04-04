@@ -34,6 +34,9 @@ cd costelebot
 
 # Install seluruh Pustaka Dependensi (sangat wajib)
 npm install
+
+# Instalasi Mesin Browser Web untuk Scraper Gofile
+npx playwright install
 ```
 
 ### 3. Setup Konfigurasi Kunci (Environment Variables)

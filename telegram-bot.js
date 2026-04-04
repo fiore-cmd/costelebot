@@ -530,6 +530,7 @@ function startBot() {
     { command: '/start', description: 'Buka Menu Utama' },
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
+    { command: '/gacha34', description: '🟢 Rule34 Gacha (Single SSR Media)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
     { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
@@ -543,9 +544,10 @@ function startBot() {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🔍 Browse Cosplaytele', callback_data: 'menu_cosplaytele' }],
-          [{ text: '🎲 Gacha Cosplay (Acak!)', callback_data: 'menu_gacha' }],
-          [{ text: '🔎 Cari / Search Judul', callback_data: 'menu_search' }],
+          [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
+          [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
+          [{ text: '🟢 Gacha Khusus Rule34 SSR', callback_data: 'menu_gacha34' }],
+          [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
           [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
         ]
       }
@@ -559,7 +561,7 @@ function startBot() {
     doCosplayteleBrowse(bot, msg.chat.id, 'home', 1);
   });
 
-  bot.onText(/\/gacha/, (msg) => {
+  bot.onText(/\/gacha(?!\d)/, (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
     log.info(`[User ${msg.chat.id}] Execute /gacha`);
     doCosplayteleGacha(bot, msg.chat.id);
@@ -587,7 +589,31 @@ function startBot() {
     }, 4000);
   });
 
-  bot.onText(/\/stats/, async (msg) => {
+  bot.onText(/^\/gacha34(?:\s|$)/, async (msg) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
+    log.info(`[User ${msg.chat.id}] Execute /gacha34`);
+    
+    let sid = null;
+    const status = async (txt) => {
+      try {
+        if (!txt) { 
+            if (sid) bot.deleteMessage(msg.chat.id, sid).catch(()=>{}); 
+            return; 
+        }
+        if (!sid) {
+          const m = await bot.sendMessage(msg.chat.id, txt, { parse_mode: 'HTML' });
+          sid = m.message_id;
+        } else {
+          await bot.editMessageText(txt, { chat_id: msg.chat.id, message_id: sid, parse_mode: 'HTML' }).catch(()=>{});
+        }
+      } catch (e) {}
+    };
+    
+    const r34 = require('./scrapers/rule34');
+    await r34.doR34Gacha(bot, msg.chat.id, status);
+  });
+
+  bot.onText(/^\/stats(?:\s|$)/, async (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
     log.info(`[User ${msg.chat.id}] Execute /stats`);
     
@@ -670,12 +696,28 @@ function startBot() {
   // Callbacks
   bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
-    const data = query.data;
-    log.info(`[User ${chatId}] Hitungan Callback: ${data}`);
+    const action = query.data;
+    log.info(`[User ${chatId}] Hitungan Callback: ${action}`);
     bot.answerCallbackQuery(query.id).catch(()=>{});
 
-    if (data.startsWith('dls_gofile_')) {
-      const fileId = data.replace('dls_gofile_', '');
+    let sid = null;
+    const status = async (txt) => {
+      try {
+        if (!txt) { 
+            if (sid) bot.deleteMessage(chatId, sid).catch(()=>{}); 
+            return; 
+        }
+        if (!sid) {
+          const m = await bot.sendMessage(chatId, txt, { parse_mode: 'HTML' });
+          sid = m.message_id;
+        } else {
+          await bot.editMessageText(txt, { chat_id: chatId, message_id: sid, parse_mode: 'HTML' }).catch(()=>{});
+        }
+      } catch (e) {}
+    };
+
+    if (action.startsWith('dls_gofile_')) {
+      const fileId = action.replace('dls_gofile_', '');
       const state = userStates.get(chatId);
       if (!state || state.step !== 'SELECT_GOFILE_FILE') return bot.sendMessage(chatId, 'Sesi kadaluarsa. Coba klik download ulang dari menu.');
       
@@ -687,15 +729,41 @@ function startBot() {
     }
 
     // Menus
-    if (data === 'menu_cosplaytele') return doCosplayteleBrowse(bot, chatId);
-    if (data === 'menu_gacha') return doCosplayteleGacha(bot, chatId);
+    if (action === 'menu_cosplaytele' || action === 'menu_browse') return doCosplayteleBrowse(bot, chatId);
+    if (action === 'menu_gacha') return doCosplayteleGacha(bot, chatId);
+    if (action === 'menu_awal') {
+      return sendMainMenu(bot, chatId);
+    }
+    
+    if (action === 'menu_gacha34' || action === 'gacha34_reroll') {
+      if (action === 'gacha34_reroll') bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      log.info(`[User ${chatId}] Hitungan Callback: ${action}`);
+      const r34 = require('./scrapers/rule34');
+      await status('🎲 <b>Rule34 Gacha:</b> Memanaskan mesin...');
+      await r34.doR34Gacha(bot, chatId, status);
+      return;
+    }
+    
+    if (action === 'menu_stats') {
+      const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
+      const hrs = Math.floor(uptimeSec / 3600);
+      const mins = Math.floor((uptimeSec % 3600) / 60);
+      const ramMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+      const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(0);
+      const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(0);
+      let dlFormatted = botStats.downloadedBytes > 1024*1024*1024 ? (botStats.downloadedBytes / (1024*1024*1024)).toFixed(2) + ' GB' : (botStats.downloadedBytes / (1024*1024)).toFixed(2) + ' MB';
+      
+      const txt = `📊 <b>Statistik Server Bot Canggih</b>\n━━━━━━━━━━━━━━━━━━\n⏳ <b>Uptime:</b> ${hrs} Jam ${mins} Menit\n💾 <b>RAM Node.js:</b> ${ramMB} MB\n🖥️ <b>RAM VPS Global:</b> Sisa ${freeMemMB} MB / ${totalMemMB} MB\n\n📈 <b>Aktivitas Kinerja:</b>\n🌐 Trafik Terkuras: <b>${dlFormatted}</b>\n✅ Total Dieksekusi: <b>${botStats.totalJobs}</b> Album\n📸 Media Terkirim: <b>${botStats.extractedFiles}</b> File\n━━━━━━━━━━━━━━━━━━`;
+      await bot.sendMessage(chatId, txt, { parse_mode: 'HTML' });
+      return;
+    }
 
-    if (data === 'menu_terabox') {
+    if (action === 'menu_terabox') {
       const msg = await bot.sendMessage(chatId, 'Silakan COPY paste link TeraBox.com langsung ke bot ini.');
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
     }
-    if (data === 'menu_search') {
+    if (action === 'menu_search') {
       userStates.set(chatId, { step: 'AWAITING_SEARCH_QUERY' });
       const msg = await bot.sendMessage(chatId, '🔍 <b>Pencarian Judul / Karakter</b>\n\nSilakan ketik nama karakter, nama cosplayer, atau judul apa saja di kolom chat, lalu kirimkan:', { parse_mode: 'HTML' });
       autoCleanOldMenu(bot, chatId, msg.message_id);

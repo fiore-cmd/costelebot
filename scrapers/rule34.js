@@ -28,34 +28,34 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      try {
          resList = await axios.get(listUrl, { headers: r34Headers, timeout: 5000 });
      } catch (err) {
-         console.warn('R34 offset ' + randomPageOffset + ' ditolak atau timeout. Memulai Proxy Rotation...');
+         console.warn('R34 offset ' + randomPageOffset + ' ditolak atau timeout. Memulai Aggressive Proxy Race...');
          const pm = require('./proxyManager');
          const { HttpsProxyAgent } = await import('https-proxy-agent');
          
-         let proxySuccess = false;
-         for (let retry = 1; retry <= 5; retry++) {
-             const pxIp = await pm.getRandomProxy();
-             if (!pxIp) break;
+         await statusCallback(`🛡️ <b>Anti-Bot:</b> Membanjiri jaringan TheSpeedX dengan 100 sambungan Paralel...\n⏳ Mencari 1 Proxy tercepat...`);
+         
+         try {
+             const proxies = await pm.getProxies();
+             const testProxies = [];
+             for(let i=0; i<100; i++) testProxies.push(proxies[Math.floor(Math.random() * proxies.length)]);
              
-             await statusCallback(`🛡️ <b>Anti-Bot:</b> Memutar IP TheSpeedX [${retry}/5]\nMenyamar lewat <code>${pxIp.substring(0, 15)}...</code>`);
-             try {
+             const promises = testProxies.map(async (pxIp) => {
                  const agent = new HttpsProxyAgent('http://' + pxIp);
                  const controller = new AbortController();
-                 const timeoutId = setTimeout(() => controller.abort(), 4000);
+                 const timeoutId = setTimeout(() => controller.abort(), 10000); // Max 10 detik
                  
-                 resList = await axios.get(listUrl, { headers: r34Headers, httpsAgent: agent, signal: controller.signal });
+                 const result = await axios.get(listUrl, { headers: r34Headers, httpsAgent: agent, signal: controller.signal });
                  clearTimeout(timeoutId);
-                 
-                 proxySuccess = true;
-                 successfulProxyAgent = agent;
-                 break;
-             } catch (pxErr) {
-                 console.warn(`[Proxy] ${pxIp} mati: ${pxErr.message}`);
-             }
-         }
-         
-         if (!proxySuccess) {
-             return statusCallback('⚠️ Gagal menembus Tembok Cloudflare setelah 5x rotasi Proxy TheSpeedX. Proxy public sedang kelelahan, coba klik Reroll lagi!');
+                 return { agent, result, pxIp };
+             });
+             
+             const winner = await Promise.any(promises);
+             resList = winner.result;
+             successfulProxyAgent = winner.agent;
+             await statusCallback(`🟢 <b>Proxy Ditemukan! [${winner.pxIp}]</b> Melanjutkan Gacha...`);
+         } catch (raceErr) {
+             console.warn(`[Proxy Race] Semua 100 Proxy mati terkapar!`);
+             return statusCallback('⚠️ Gagal menembus Tembok Cloudflare. 100 IP Proxy Public mati serentak. Silakan klik Reroll lagi untuk mencoba 100 IP baru!');
          }
      }
      

@@ -429,13 +429,17 @@ async function sendPostDetail(bot, chatId, loadMsg, post, cacheIndex) {
     }
     if (links.sorafolder) resText += `📁 <b>Sorafolder:</b> ${links.sorafolder}\n`;
     if (links.terabox) resText += `📥 <b>TeraBox:</b> ${links.terabox}\n`;
-    if (links.telegram) resText += `✈️ <b>Telegram:</b> ${links.telegram}\n`;
   } else {
     resText += 'Tidak ada link yang dikenali.';
   }
   
-  // Tambahkan tombol Back ke daftar List
-  dlButtons.push([{ text: '🔙 Kembali ke Daftar', callback_data: 'back_browse' }]);
+  const stateInfo = browseCache.get(chatId);
+  if (stateInfo && stateInfo.isGacha) {
+    dlButtons.push([{ text: '🎲 Cari Acak Lagi (Reroll)', callback_data: 'menu_gacha' }]);
+    dlButtons.push([{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]);
+  } else {
+    dlButtons.push([{ text: '🔙 Kembali ke Daftar', callback_data: 'back_browse' }]);
+  }
   
   const replyMarkupObj = dlButtons.length > 0 ? { inline_keyboard: dlButtons } : undefined;
 
@@ -729,9 +733,16 @@ function startBot() {
     }
 
     // Menus
-    if (action === 'menu_cosplaytele' || action === 'menu_browse') return doCosplayteleBrowse(bot, chatId);
-    if (action === 'menu_gacha') return doCosplayteleGacha(bot, chatId);
+    if (action === 'menu_cosplaytele' || action === 'menu_browse') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doCosplayteleBrowse(bot, chatId);
+    }
+    if (action === 'menu_gacha') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doCosplayteleGacha(bot, chatId);
+    }
     if (action === 'menu_awal') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       return sendMainMenu(bot, chatId);
     }
     
@@ -771,19 +782,19 @@ function startBot() {
     }
 
     // Pagination Cosplaytele
-    if (data.startsWith('cpage_')) {
-      const page = parseInt(data.split('_')[1], 10);
+    if (action.startsWith('cpage_')) {
+      const page = parseInt(action.split('_')[1], 10);
       const cache = browseCache.get(chatId);
       if (cache) doCosplayteleBrowse(bot, chatId, cache.category, page, cache.query);
       return;
     }
 
     // Terabox Source selection
-    if (data === 'src_4khd' || data === 'src_other') {
+    if (action === 'src_4khd' || action === 'src_other') {
       const state = userStates.get(chatId);
       if (!state || state.step !== 'AWAITING_SOURCE') return bot.sendMessage(chatId, 'Sesi kadaluarsa, kirim ulang link.');
       
-      if (data === 'src_4khd') {
+      if (action === 'src_4khd') {
         userStates.delete(chatId);
         bot.sendMessage(chatId, '✅ Menggunakan password default 4KHD. Memulai download...');
         processDownload(bot, chatId, state.url, '4KHD').catch(()=>{});
@@ -795,8 +806,8 @@ function startBot() {
     }
 
     // Detail Cosplaytele
-    if (data.startsWith('cpt_')) {
-      const idx = parseInt(data.split('_')[1], 10);
+    if (action.startsWith('cpt_')) {
+      const idx = parseInt(action.split('_')[1], 10);
       const cache = browseCache.get(chatId);
       if (!cache || !cache.posts[idx]) return bot.sendMessage(chatId, 'Data kedaluwarsa.');
       
@@ -808,7 +819,7 @@ function startBot() {
     }
     
     // Kembali ke Browse List (Tombol Back)
-    if (data === 'back_browse') {
+    if (action === 'back_browse') {
       const cache = browseCache.get(chatId);
       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{}); // Hapus foto preview
       
@@ -833,8 +844,8 @@ function startBot() {
     }
 
     // Auto Gofile Download dari menu
-    if (data.startsWith('dlgofile_')) {
-      const idx = parseInt(data.split('_')[1], 10);
+    if (action.startsWith('dlgofile_')) {
+      const idx = parseInt(action.split('_')[1], 10);
       const cache = browseCache.get(chatId);
       if (!cache || !cache.posts[idx]) return;
       const post = cache.posts[idx];

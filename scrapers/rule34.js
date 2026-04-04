@@ -10,8 +10,9 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      await statusCallback('🎲 <b>Rule34 Gacha:</b> Memutar roda Roulette miliaran arsip...');
      
      // Rule34 menggunakan 'pid' sebagai post offset (kelipatan 42)
-     // Batas aman Guest Mode tanpa login biasanya di sekitar kedalaman 500-1000 halaman
-     const randomPageOffset = Math.floor(Math.random() * 1000) * 42; 
+     // VPS acap kali diblokir oleh Cloudflare 403 jika hanya memakai Axios.
+     // Kita turunkan rasio halaman agar tidak terlalu dalam (Max 500 pages = 21000 pid)
+     const randomPageOffset = Math.floor(Math.random() * 500) * 42; 
      const listUrl = `https://rule34.xxx/index.php?page=post&s=list&pid=${randomPageOffset}`;
      
      const r34Headers = {
@@ -21,13 +22,22 @@ async function doR34Gacha(bot, chatId, statusCallback) {
          'Cookie': 'resize-original=1;'
      };
 
+     // Menghindari Deteksi Cloudflare VPS dengan Fallback
      let resList;
      try {
          resList = await axios.get(listUrl, { headers: r34Headers });
      } catch (err) {
-         // Jika tetap mendapat 403 karena kedalaman limit, fallback ke halaman depan!
-         console.warn('R34 offset ' + randomPageOffset + ' ditolak (403/Limit), fallback ke halaman awal.');
-         resList = await axios.get('https://rule34.xxx/index.php?page=post&s=list&pid=0', { headers: r34Headers });
+         console.warn('R34 offset ' + randomPageOffset + ' ditolak (403). Rule34 mendeteksi IP VPS Anda!');
+         // Jika gagal API HTTP standar, kita pindah menggunakan Playwright (Headless Browser)
+         const { chromium } = require('playwright');
+         const browser = await chromium.launch({ headless: true });
+         const ctx = await browser.newContext({ userAgent: r34Headers['User-Agent'] });
+         const page = await ctx.newPage();
+         await statusCallback('🛡️ <b>Anti-Bot Terpicu:</b> Mengerahkan Mesin Chrome Headless...');
+         await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+         const rHtml = await page.content();
+         await browser.close();
+         resList = { data: rHtml };
      }
      
      const $ = cheerio.load(resList.data);
@@ -47,7 +57,20 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      await statusCallback(`🔍 <b>Rule34 Gacha:</b> ID Diamankan! Membongkar Tautan HD...`);
      
      // 3. Masuk ke halaman detail untuk mencuri link media asli
-     const resDetail = await axios.get(randomPostUrl, { headers: r34Headers });
+     let resDetail;
+     try {
+         resDetail = await axios.get(randomPostUrl, { headers: r34Headers });
+     } catch (e) {
+         const { chromium } = require('playwright');
+         const browser = await chromium.launch({ headless: true });
+         const ctx = await browser.newContext({ userAgent: r34Headers['User-Agent'] });
+         const page = await ctx.newPage();
+         await page.goto(randomPostUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+         const dHtml = await page.content();
+         await browser.close();
+         resDetail = { data: dHtml };
+     }
+     
      const $d = cheerio.load(resDetail.data);
      
      const imgSrc = $d('#image').attr('src');

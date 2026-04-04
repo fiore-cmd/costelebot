@@ -22,22 +22,36 @@ async function doR34Gacha(bot, chatId, statusCallback) {
          'Cookie': 'resize-original=1;'
      };
 
-     // Menghindari Deteksi Cloudflare VPS dengan Fallback
      let resList;
+     let successfulProxyAgent = null;
+     
      try {
-         resList = await axios.get(listUrl, { headers: r34Headers });
+         resList = await axios.get(listUrl, { headers: r34Headers, timeout: 5000 });
      } catch (err) {
-         console.warn('R34 offset ' + randomPageOffset + ' ditolak (403). Rule34 mendeteksi IP VPS Anda!');
-         // Jika gagal API HTTP standar, kita pindah menggunakan Playwright (Headless Browser)
-         const { chromium } = require('playwright');
-         const browser = await chromium.launch({ headless: true });
-         const ctx = await browser.newContext({ userAgent: r34Headers['User-Agent'] });
-         const page = await ctx.newPage();
-         await statusCallback('🛡️ <b>Anti-Bot Terpicu:</b> Mengerahkan Mesin Chrome Headless...');
-         await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-         const rHtml = await page.content();
-         await browser.close();
-         resList = { data: rHtml };
+         console.warn('R34 offset ' + randomPageOffset + ' ditolak atau timeout. Memulai Proxy Rotation...');
+         const pm = require('./proxyManager');
+         const { HttpsProxyAgent } = await import('https-proxy-agent');
+         
+         let proxySuccess = false;
+         for (let retry = 1; retry <= 5; retry++) {
+             const pxIp = await pm.getRandomProxy();
+             if (!pxIp) break;
+             
+             await statusCallback(`🛡️ <b>Anti-Bot:</b> Memutar IP TheSpeedX [${retry}/5]\nMenyamar lewat <code>${pxIp.substring(0, 15)}...</code>`);
+             try {
+                 const agent = new HttpsProxyAgent('http://' + pxIp);
+                 resList = await axios.get(listUrl, { headers: r34Headers, httpsAgent: agent, timeout: 4000 });
+                 proxySuccess = true;
+                 successfulProxyAgent = agent;
+                 break;
+             } catch (pxErr) {
+                 console.warn(`[Proxy] ${pxIp} mati: ${pxErr.message}`);
+             }
+         }
+         
+         if (!proxySuccess) {
+             return statusCallback('⚠️ Gagal menembus Tembok Cloudflare setelah 5x rotasi Proxy TheSpeedX. Proxy public sedang kelelahan, coba klik Reroll lagi!');
+         }
      }
      
      const $ = cheerio.load(resList.data);
@@ -59,16 +73,13 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      // 3. Masuk ke halaman detail untuk mencuri link media asli
      let resDetail;
      try {
-         resDetail = await axios.get(randomPostUrl, { headers: r34Headers });
+         resDetail = await axios.get(randomPostUrl, { 
+             headers: r34Headers, 
+             timeout: 5000, 
+             httpsAgent: successfulProxyAgent 
+         });
      } catch (e) {
-         const { chromium } = require('playwright');
-         const browser = await chromium.launch({ headless: true });
-         const ctx = await browser.newContext({ userAgent: r34Headers['User-Agent'] });
-         const page = await ctx.newPage();
-         await page.goto(randomPostUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-         const dHtml = await page.content();
-         await browser.close();
-         resDetail = { data: dHtml };
+         return statusCallback('⚠️ Koneksi terputus saat mengambil detail postingan lewat Proxy.');
      }
      
      const $d = cheerio.load(resDetail.data);
@@ -94,7 +105,18 @@ async function doR34Gacha(bot, chatId, statusCallback) {
      };
      
      // Download sebagai stream untuk dikirim agar tidak ditolak Telegram "failed to get HTTP URL"
-     const streamRes = await axios.get(finalMedia, { responseType: 'stream', headers: r34Headers });
+     let streamRes;
+     try {
+         streamRes = await axios.get(finalMedia, { 
+             responseType: 'stream', 
+             headers: r34Headers,
+             httpsAgent: successfulProxyAgent,
+             timeout: 15000 // Beri waktu download agak panjang karena proxy kadang lamban
+         });
+     } catch (e) {
+         return statusCallback('⚠️ Gagal mendownload media stream dari Proxy (Media Terlalu Besar / Proxy Mati). Silakan Reroll.');
+     }
+     
      const fileOptions = { filename: isVideo ? 'video.mp4' : 'image.jpg', contentType: isVideo ? 'video/mp4' : 'image/jpeg' };
 
      if (isVideo) {

@@ -571,7 +571,8 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           const mediaGroup = chunk.map((localFile, idx) => ({
               type: localFile.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'photo',
               media: fs.createReadStream(localFile),
-              caption: i === 0 && idx === 0 ? `🍁 <b>${selectedPost.title}</b>` : undefined,
+              // Telegram tidak mengizinkan tombol (reply_markup) pada Album (MediaGroup). 
+              // Caption dikosongkan agar semua teks digabung pada menu kemudi di bawahnya.
               parse_mode: 'HTML'
           }));
           
@@ -583,7 +584,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           await sleep(CONFIG.SEND_DELAY); 
       }
       
-      const navMsg = await bot.sendMessage(chatId, `✨ <i>Selesai! ${downloadedFiles.length} File premium berhasil dikirim.</i>`, {
+      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n✨ <i>Selesai! ${downloadedFiles.length} File premium berhasil dikirim.</i>`, {
          parse_mode: 'HTML',
          reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
       });

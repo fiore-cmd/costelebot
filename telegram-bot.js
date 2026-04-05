@@ -510,23 +510,22 @@ async function doCosplayteleGacha(bot, chatId) {
 
 async function doKemonoGacha(bot, chatId, creatorUrl) {
   const gMsg = await bot.sendMessage(chatId, '🍁 <b>Kemono Gacha...</b>\n<i>Menelusuri database Patreon dari vault Kemono.cr...</i>', { parse_mode: 'HTML' });
-  await autoCleanOldMenu(bot, chatId, gMsg.message_id);
 
   try {
       const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
-      await bot.editMessageText(`🍁 <b>Mendapatkan Post Eksklusif!</b>\n\n📌 <b>${selectedPost.title}</b>\n\n<i>⏳ Mengumpulkan tautan gambar secara diam-diam...</i>`, { 
-        chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' 
-      });
-      
       const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
       const allUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
           .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/)); // Filter only images for mediagroup gacha
       
       if (allUrls.length === 0) {
-          return bot.editMessageText(`😔 <b>${selectedPost.title}</b>\n\nPost ini tidak berisi gambar yang didukung (mungkin isinya zip/teks saja). Coba gacha lagi!`, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' });
+          return bot.editMessageText(`😔 <b>${selectedPost.title}</b>\n\nPost ini tidak berisi gambar yang didukung (mungkin isinya zip/teks saja). Coba gacha lagi!`, { 
+              chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML',
+              reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+          });
       }
 
-      await bot.editMessageText(`🍁 <b>${selectedPost.title}</b>\n\n✅ Berhasil! Terdapat ${allUrls.length} gambar, memproses pengiriman ke Telegram...`, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' });
+      // Hapus pesan progres
+      bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
       
       // Batch into tens
       const batchSize = 10;
@@ -546,6 +545,12 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           }
           await sleep(CONFIG.SEND_DELAY); 
       }
+      
+      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n<i>✓ Berhasil mengekstrak ${allUrls.length} lukisan HD.</i>`, {
+         parse_mode: 'HTML',
+         reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
+      });
+      autoCleanOldMenu(bot, chatId, navMsg.message_id);
       
   } catch (e) {
       log.error('Kemono Gacha gagal: ' + e.message);
@@ -591,6 +596,22 @@ async function doCosplayteleBrowse(bot, chatId, category = 'home', page = 1, que
 }
 
 // ─── INIT BOT ────────────────────────────────────────────────────────────────
+async function sendMainMenu(bot, chatId) {
+  const sentMsg = await bot.sendMessage(chatId, `👋 <b>Cosplay & 4KHD Bot</b>\n\nPilih mode operasi:`, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
+        [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
+        [{ text: '🍁 Kemono Gacha Eksklusif', callback_data: 'menu_kemono_reroll' }],
+        [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
+        [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
+      ]
+    }
+  });
+  autoCleanOldMenu(bot, chatId, sentMsg.message_id);
+}
+
 function startBot() {
   const bot = new TelegramBot(CONFIG.BOT_TOKEN, { polling: true });
   log.ok('Bot Telegram aktif ✅');
@@ -607,21 +628,10 @@ function startBot() {
   ]).catch(() => log.warn('Gagal set command menu.'));
 
   // Menus
-  bot.onText(/\/start/, async (msg) => {
+  bot.onText(/\/start/, (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean chat dari sisi user
     log.info(`[User ${msg.chat.id}] Execute /start`);
-    const sentMsg = await bot.sendMessage(msg.chat.id, `👋 <b>Cosplay & 4KHD Bot</b>\n\nPilih mode operasi:`, {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
-          [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
-          [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
-          [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
-        ]
-      }
-    });
-    autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
+    sendMainMenu(bot, msg.chat.id);
   });
 
   bot.onText(/\/browse/, (msg) => {
@@ -806,9 +816,12 @@ function startBot() {
       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       return sendMainMenu(bot, chatId);
     }
-    
-    
-    
+    if (action === 'menu_kemono_reroll') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      const urls = ['https://kemono.cr/patreon/user/3295915', 'https://kemono.cr/patreon/user/49965584'];
+      const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
+      return doKemonoGacha(bot, chatId, pickedUrl);
+    }
     if (action === 'menu_stats') {
       const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
       const hrs = Math.floor(uptimeSec / 3600);

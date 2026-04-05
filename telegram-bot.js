@@ -13,6 +13,7 @@ const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
 const mediafireApi                = require('./scrapers/mediafire');
 const kemonoScraper               = require('./scrapers/kemono');
+const r34Scraper                  = require('./scrapers/rule34video');
 
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
 sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
@@ -154,6 +155,7 @@ const userStates = new Map();
 const browseCache = new Map(); // chatId -> { posts: [], page, category, query }
 const menuTracker = new Map(); // chatId -> lastMessageId (Untuk auto-clean menu lama)
 const kemonoTracker = new Map(); // chatId -> array of message_ids (Untuk auto-clean media gacha)
+const r34BrowseCache = new Map(); // chatId -> { posts: [], page, query }
 
 // ─── ADMIN STATS TRACKER ─────────────────────────────────────────────────────
 const botStats = {
@@ -629,6 +631,168 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
   }
 }
 
+// ─── RULE34VIDEO HANDLERS ────────────────────────────────────────────────────
+async function doR34Browse(bot, chatId, page = 1, query = null) {
+  log.info(`[User ${chatId}] Request R34Video (Page: ${page}, Query: ${query || 'none'})`);
+  const loadMsg = await bot.sendMessage(chatId, `🎬 <b>Memuat Rule34Video...</b>`, { parse_mode: 'HTML' });
+  await autoCleanOldMenu(bot, chatId, loadMsg.message_id);
+
+  try {
+    const posts = await r34Scraper.scrapeListing(page, query);
+    if (!posts.length) return bot.editMessageText('⚠️ Tidak ada video ditemukan.', { chat_id: chatId, message_id: loadMsg.message_id });
+
+    const shown = posts.slice(0, 10);
+    r34BrowseCache.set(chatId, { posts: shown, page, query });
+
+    let text = `🎬 <b>Rule34Video</b> ${query ? `(Search: ${query})` : '(Terbaru)'} · Halaman ${page}\n\n`;
+    shown.forEach((p, i) => text += `${i+1}. ${p.title}\n`);
+
+    const buttons = [];
+    for (let i = 0; i < shown.length; i += 2) {
+      const row = [{ text: `${i+1}. 🎬 Detail`, callback_data: `r34_${i}` }];
+      if (i+1 < shown.length) row.push({ text: `${i+2}. 🎬 Detail`, callback_data: `r34_${i+1}` });
+      buttons.push(row);
+    }
+
+    const navRow = [];
+    if (page > 1) navRow.push({ text: '◀ Prev', callback_data: `r34page_${page-1}` });
+    navRow.push({ text: 'Next ▶', callback_data: `r34page_${page+1}` });
+    buttons.push(navRow);
+    buttons.push([{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]);
+
+    await bot.editMessageText(text, {
+      chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: buttons }
+    });
+  } catch (err) {
+    bot.editMessageText(`❌ Gagal: ${err.message}`, { chat_id: chatId, message_id: loadMsg.message_id }).catch(()=>{});
+  }
+}
+
+async function doR34Gacha(bot, chatId) {
+  const gMsg = await bot.sendMessage(chatId, '🎬 <b>R34 Video Gacha...</b>\n<i>Mengacak konten dari database Rule34Video...</i>', { parse_mode: 'HTML' });
+  
+  try {
+    // Ambil halaman random (1-100)
+    const randomPage = Math.floor(Math.random() * 50) + 1;
+    const posts = await r34Scraper.scrapeListing(randomPage);
+    if (!posts.length) {
+      return bot.editMessageText('😔 Gagal memuat video acak. Coba lagi!', { 
+        chat_id: chatId, message_id: gMsg.message_id,
+        reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_r34_gacha' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+      });
+    }
+    
+    const pick = posts[Math.floor(Math.random() * posts.length)];
+    log.ok(`[R34] Gacha pick: ${pick.title}`);
+    
+    const links = await r34Scraper.scrapePostDetail(pick.link);
+    if (!links.length) {
+      return bot.editMessageText(`😔 <b>${pick.title}</b>\n\nGagal mendapatkan link download. Coba reroll!`, { 
+        chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_r34_gacha' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+      });
+    }
+
+    await bot.editMessageText(`🎬 <b>${pick.title}</b>\n\n<i>⏳ Mengunduh video ke server lokal (auto-fallback resolusi)...</i>`, {
+      chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML'
+    }).catch(()=>{});
+
+    // Download dengan auto-fallback resolusi
+    const jobDir = path.join(CONFIG.TEMP_DIR, 'r34_' + Date.now());
+    await fsp.mkdir(jobDir, { recursive: true });
+    let downloaded = null;
+    
+    for (const dl of links) {
+      try {
+        const dest = path.join(jobDir, 'video.mp4');
+        await downloadStream(dl.url, dest, null, null);
+        const fsize = fs.statSync(dest).size;
+        if (fsize > 48 * 1024 * 1024) {
+          log.warn(`[R34] ${dl.label} terlalu besar (${(fsize/1024/1024).toFixed(1)}MB), fallback ke resolusi berikutnya...`);
+          fs.unlinkSync(dest);
+          continue; // Coba resolusi lebih rendah
+        }
+        downloaded = dest;
+        log.ok(`[R34] Berhasil download ${dl.label} (${(fsize/1024/1024).toFixed(1)}MB)`);
+        break;
+      } catch(e) {
+        log.warn(`[R34] Gagal download ${dl.label}: ${e.message}`);
+      }
+    }
+
+    if (!downloaded) {
+      await rimraf(jobDir);
+      return bot.editMessageText(`❌ Semua resolusi gagal didownload atau melebihi 50MB.`, { 
+        chat_id: chatId, message_id: gMsg.message_id,
+        reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_r34_gacha' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+      });
+    }
+
+    // Hapus pesan loading
+    bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
+
+    // Kirim video
+    try {
+      await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
+        caption: `🎬 <b>${pick.title}</b>`,
+        parse_mode: 'HTML',
+        supports_streaming: true
+      });
+    } catch(e) {
+      log.error(`[R34 Send Error] ${e.message}`);
+    }
+
+    const navMsg = await bot.sendMessage(chatId, `✨ <i>Video berhasil dikirim!</i>`, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_r34_gacha' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
+    });
+    autoCleanOldMenu(bot, chatId, navMsg.message_id);
+
+    // Cleanup
+    await rimraf(jobDir);
+  } catch(e) {
+    log.error('R34 Gacha gagal: ' + e.message);
+    bot.editMessageText(`❌ Error R34: ${e.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(()=>{});
+  }
+}
+
+async function doR34PostDetail(bot, chatId, post) {
+  const loadMsg = await bot.sendMessage(chatId, `🎬 <b>Memuat detail...</b>`, { parse_mode: 'HTML' });
+  
+  try {
+    const links = await r34Scraper.scrapePostDetail(post.link);
+    let text = `🎬 <b>${post.title}</b>\n\n`;
+    if (links.length) {
+      text += `📥 <b>Resolusi Tersedia:</b>\n`;
+      links.forEach(l => text += `• ${l.label}\n`);
+    } else {
+      text += '⚠️ Tidak ada link download terdeteksi.';
+    }
+
+    const buttons = [];
+    if (links.length) {
+      buttons.push([{ text: '⬇️ Download (Auto Best Quality)', callback_data: `r34dl_${r34BrowseCache.get(chatId)?.posts?.indexOf(post) ?? 0}` }]);
+    }
+    buttons.push([{ text: '🔙 Kembali ke Daftar', callback_data: 'r34_back_browse' }]);
+    buttons.push([{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]);
+
+    if (post.thumb) {
+      await bot.deleteMessage(chatId, loadMsg.message_id).catch(()=>{});
+      await bot.sendPhoto(chatId, post.thumb, {
+        caption: text, parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons }
+      });
+    } else {
+      await bot.editMessageText(text, {
+        chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buttons }
+      });
+    }
+  } catch(e) {
+    bot.editMessageText(`❌ Gagal: ${e.message}`, { chat_id: chatId, message_id: loadMsg.message_id }).catch(()=>{});
+  }
+}
+
 // ─── COSPLAYTELE BROWSE HANDLERS ─────────────────────────────────────────────
 async function doCosplayteleBrowse(bot, chatId, category = 'home', page = 1, query = null) {
   log.info(`[User ${chatId}] Request Cosplaytele (Cat: ${category}, Page: ${page}, Query: ${query || 'none'})`);
@@ -675,6 +839,7 @@ async function sendMainMenu(bot, chatId) {
         [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
         [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
         [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
+        [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
         [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
         [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
       ]
@@ -693,6 +858,7 @@ function startBot() {
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
     { command: '/maple', description: '🍁 Gacha Patreon' },
+    { command: '/r34', description: '🎬 Rule34 Video (Browse & Gacha)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
     { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
@@ -726,6 +892,29 @@ function startBot() {
     const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
     log.info(`[User ${msg.chat.id}] Execute /maple Kemono Gacha (${pickedUrl})`);
     doKemonoGacha(bot, msg.chat.id, pickedUrl);
+  });
+
+  bot.onText(/^\/r34(?:\s+(.+))?$/, async (msg, match) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
+    const query = match[1];
+    if (query) {
+      log.info(`[User ${msg.chat.id}] Execute /r34 search: ${query}`);
+      doR34Browse(bot, msg.chat.id, 1, query);
+    } else {
+      log.info(`[User ${msg.chat.id}] Execute /r34 (Menu)`);
+      const sentMsg = await bot.sendMessage(msg.chat.id, `🎬 <b>Rule34 Video</b>\n\nPilih mode:`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔍 Cari Video', callback_data: 'r34_search_prompt' }],
+            [{ text: '📋 Browse Terbaru', callback_data: 'menu_r34_browse' }],
+            [{ text: '🎲 Gacha Video Random', callback_data: 'menu_r34_gacha' }],
+            [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+          ]
+        }
+      });
+      autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
+    }
   });
 
   bot.onText(/^\/search(?:\s+(.+))?$/, async (msg, match) => {
@@ -818,6 +1007,14 @@ function startBot() {
       return;
     }
 
+    // If awaiting R34 search query
+    if (state && state.step === 'AWAITING_R34_SEARCH') {
+      userStates.delete(chatId);
+      log.info(`[User ${chatId}] Pencarian R34Video: ${text}`);
+      doR34Browse(bot, chatId, 1, text);
+      return;
+    }
+
     // Direct link paste
     if (text.includes('terabox.com') || text.includes('1024terabox.com')) {
       userStates.set(chatId, { step: 'AWAITING_SOURCE', url: text });
@@ -893,6 +1090,96 @@ function startBot() {
       const urls = ['https://kemono.cr/patreon/user/3295915', 'https://kemono.cr/patreon/user/49965584'];
       const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
       return doKemonoGacha(bot, chatId, pickedUrl);
+    }
+
+    // ── Rule34Video Callbacks ──
+    if (action === 'menu_r34_browse') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doR34Browse(bot, chatId);
+    }
+    if (action === 'menu_r34_gacha') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doR34Gacha(bot, chatId);
+    }
+    if (action === 'r34_search_prompt') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      userStates.set(chatId, { step: 'AWAITING_R34_SEARCH' });
+      const sentMsg = await bot.sendMessage(chatId, '🎬 <b>Pencarian Rule34Video</b>\n\nSilakan ketik tag/karakter yang ingin dicari:', { parse_mode: 'HTML' });
+      autoCleanOldMenu(bot, chatId, sentMsg.message_id);
+      return;
+    }
+    if (action === 'r34_back_browse') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      const cache = r34BrowseCache.get(chatId);
+      return doR34Browse(bot, chatId, cache?.page || 1, cache?.query || null);
+    }
+    if (action.startsWith('r34page_')) {
+      const pg = parseInt(action.replace('r34page_', ''));
+      const cache = r34BrowseCache.get(chatId);
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doR34Browse(bot, chatId, pg, cache?.query || null);
+    }
+    if (action.startsWith('r34_') && !action.startsWith('r34dl_') && !action.startsWith('r34page_')) {
+      const idx = parseInt(action.replace('r34_', ''));
+      const cache = r34BrowseCache.get(chatId);
+      if (!cache || !cache.posts[idx]) return bot.sendMessage(chatId, '⚠️ Sesi kadaluarsa.');
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doR34PostDetail(bot, chatId, cache.posts[idx]);
+    }
+    if (action.startsWith('r34dl_')) {
+      const idx = parseInt(action.replace('r34dl_', ''));
+      const cache = r34BrowseCache.get(chatId);
+      if (!cache || !cache.posts[idx]) return bot.sendMessage(chatId, '⚠️ Sesi kadaluarsa.');
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      
+      const post = cache.posts[idx];
+      const dlMsg = await bot.sendMessage(chatId, `🎬 <b>${post.title}</b>\n\n<i>⏳ Mengunduh video (auto-fallback resolusi)...</i>`, { parse_mode: 'HTML' });
+      
+      try {
+        const links = await r34Scraper.scrapePostDetail(post.link);
+        const jobDir = path.join(CONFIG.TEMP_DIR, 'r34_' + Date.now());
+        await fsp.mkdir(jobDir, { recursive: true });
+        let downloaded = null;
+        
+        for (const dl of links) {
+          try {
+            const dest = path.join(jobDir, 'video.mp4');
+            await downloadStream(dl.url, dest, null, null);
+            const fsize = fs.statSync(dest).size;
+            if (fsize > 48 * 1024 * 1024) {
+              log.warn(`[R34] ${dl.label} terlalu besar (${(fsize/1024/1024).toFixed(1)}MB), fallback...`);
+              fs.unlinkSync(dest);
+              continue;
+            }
+            downloaded = dest;
+            log.ok(`[R34] Downloaded ${dl.label} (${(fsize/1024/1024).toFixed(1)}MB)`);
+            break;
+          } catch(e) { log.warn(`[R34] DL fail ${dl.label}: ${e.message}`); }
+        }
+        
+        if (!downloaded) {
+          await rimraf(jobDir);
+          return bot.editMessageText(`❌ Semua resolusi gagal/terlalu besar.`, { chat_id: chatId, message_id: dlMsg.message_id,
+            reply_markup: { inline_keyboard: [[ { text: '🔙 Kembali', callback_data: 'r34_back_browse' } ]] }
+          });
+        }
+        
+        bot.deleteMessage(chatId, dlMsg.message_id).catch(()=>{});
+        await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
+          caption: `🎬 <b>${post.title}</b>`, parse_mode: 'HTML', supports_streaming: true
+        });
+        
+        const nvMsg = await bot.sendMessage(chatId, `✨ <i>Video berhasil dikirim!</i>`, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[ { text: '🔙 Kembali', callback_data: 'r34_back_browse' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+        });
+        autoCleanOldMenu(bot, chatId, nvMsg.message_id);
+        await rimraf(jobDir);
+      } catch(e) {
+        log.error('R34 DL Error: ' + e.message);
+        bot.editMessageText(`❌ Error: ${e.message}`, { chat_id: chatId, message_id: dlMsg.message_id }).catch(()=>{});
+      }
+      return;
     }
     if (action === 'menu_stats') {
       const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);

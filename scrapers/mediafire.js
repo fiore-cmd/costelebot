@@ -35,10 +35,13 @@ async function getDirectLink(url) {
       return directLink;
     }
     
-    throw new Error('Elemen tombol Direct Link MediaFire tidak ditemukan di layar tujuan.');
+    throw new Error('Halaman MediaFire diproteksi atau tombol download disembunyikan.');
   } catch (err) {
+    if (err.response && err.response.status === 404) {
+      throw new Error('File MediaFire ini sudah dihapus atau melanggar hak cipta (Error 404). Silakan cari/gacha post lain.');
+    }
     console.error(`MediaFire scrape error: ${err.message}`);
-    return null;
+    throw new Error(err.message);
   }
 }
 

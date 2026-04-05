@@ -1358,13 +1358,13 @@ function startBot() {
 
       if (links && links.mediafire) {
         bot.sendMessage(chatId, '🔥 <b>Bypass MediaFire:</b> Mencari direct download link rahasia...', { parse_mode: 'HTML' }).then(async m => {
-          const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
-          if (directMFUrl) {
+          try {
+            const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
             bot.deleteMessage(chatId, m.message_id).catch(() => { });
-            // Mulai pengunduhan langsung, `isGofile` kita set `false` karena ia mendownload langsung file murni zip/rar
+            // Mulai pengunduhan langsung
             processDownload(bot, chatId, directMFUrl, null, false).catch(e => log.error('process: ' + e.message));
-          } else {
-            bot.editMessageText('⚠️ <b>Gagal!</b> Elemen download MediaFire tidak ditemukan karena proteksi.', { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
+          } catch(e) {
+            bot.editMessageText(`⚠️ <b>Gagal!</b> ${e.message}`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
           }
         });
       } else {

@@ -580,19 +580,20 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
          bot.editMessageText(txt, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' }).catch(()=>{});
       });
 
-      // Filter pelindung API Telegram: Batasan mutlak 50MB per file (video)
+      // Filter pelindung API Telegram limit (50MB Cloud / 2000MB Lokal)
       const validFiles = downloadedFiles.filter(f => {
           if (!fs.existsSync(f)) return false;
-          return fs.statSync(f).size <= 48 * 1024 * 1024; // Threshold aman 48 MB
+          return fs.statSync(f).size <= CONFIG.VIDEO_MAX_BYTES;
       });
       const rejectedCount = downloadedFiles.length - validFiles.length;
 
       // Hapus pesan progres
       bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
       
+      const thresholdMB = Math.floor(CONFIG.VIDEO_MAX_BYTES / 1024 / 1024);
       if (validFiles.length === 0) {
           await rimraf(jobDir);
-          return bot.sendMessage(chatId, `😔 Seluruh file di post ini adalah Video Raksasa (>50MB) yang ditolak mutlak oleh Server Telegram.\n\nSilakan coba post lain.`, { reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_kemono_reroll' } ]] } });
+          return bot.sendMessage(chatId, `😔 Seluruh file di post ini terlalu raksasa (>${thresholdMB}MB) yang ditolak mutlak oleh Server Telegram Anda.\n\nSilakan coba post lain.`, { reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_kemono_reroll' } ]] } });
       }
 
       const chunks = chunkMediaByLimits(validFiles);

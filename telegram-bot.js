@@ -840,7 +840,7 @@ async function doCosplayteleBrowse(bot, chatId, category = 'home', page = 1, que
 
 // ─── INIT BOT ────────────────────────────────────────────────────────────────
 async function sendMainMenu(bot, chatId) {
-  const sentMsg = await bot.sendMessage(chatId, `👋 <b>Cosplay & 4KHD Bot</b>\n\nPilih mode operasi:`, {
+  const sentMsg = await bot.sendMessage(chatId, `👋 <b>Costele Bot</b>\n\nPilih mode operasi:`, {
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [

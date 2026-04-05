@@ -153,6 +153,7 @@ async function sanitizeMediasForTelegram(medias, statusCallback) {
 const userStates = new Map();
 const browseCache = new Map(); // chatId -> { posts: [], page, category, query }
 const menuTracker = new Map(); // chatId -> lastMessageId (Untuk auto-clean menu lama)
+const kemonoTracker = new Map(); // chatId -> array of message_ids (Untuk auto-clean media gacha)
 
 // ─── ADMIN STATS TRACKER ─────────────────────────────────────────────────────
 const botStats = {
@@ -511,6 +512,16 @@ async function doCosplayteleGacha(bot, chatId) {
 async function doKemonoGacha(bot, chatId, creatorUrl) {
   const gMsg = await bot.sendMessage(chatId, '🍁 <b>Patreon Gacha...</b>\n<i>Menelusuri database Patreon dari vault...</i>', { parse_mode: 'HTML' });
 
+  // Eksekusi pembersihan media gacha lama
+  const oldMsgs = kemonoTracker.get(chatId) || [];
+  if (oldMsgs.length > 0) {
+      for (const mId of oldMsgs) {
+         bot.deleteMessage(chatId, mId).catch(()=>{});
+         await sleep(35); // cegah error socket
+      }
+      kemonoTracker.set(chatId, []);
+  }
+
   try {
       const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
       const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
@@ -577,7 +588,11 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           }));
           
           try {
-              await bot.sendMediaGroup(chatId, mediaGroup);
+              const resGroups = await bot.sendMediaGroup(chatId, mediaGroup);
+              // Rekam message_id setiap foto yang tayang agar bisa dihapus pada reroll berikutnya
+              const tracked = kemonoTracker.get(chatId) || [];
+              resGroups.forEach(m => tracked.push(m.message_id));
+              kemonoTracker.set(chatId, tracked);
           } catch(e) {
               log.error(`[Patreon Batch Send Error] ${e.message}`);
           }

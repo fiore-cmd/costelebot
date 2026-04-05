@@ -32,17 +32,17 @@ async function scrapeListing(page = 1, category = 'home', query = null) {
     const $ = cheerio.load(html);
     const postsMap = new Map();
 
-    $('.site-main a, #content a, #primary a, main a').each((i, el) => {
+    $('.post-title a, h5 a, .image-cover a, article a').each((i, el) => {
       const href = $(el).attr('href');
-      const title = $(el).text().trim();
-      const thumb = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
+      const title = $(el).text().trim() || $(el).attr('title') || '';
+      const thumb = $(el).find('img').attr('src') || $(el).find('img').attr('data-src') || '';
       
-      // Filter link as a post if it's long enough, not a category/page link
+      // Filter link as a post if it's pointing to a valid post link
       if (href && href.startsWith('https://cosplaytele.com/') && 
           !href.includes('/category/') && 
           !href.includes('/page/') && 
           !href.includes('/author/') && 
-          href.length > 35) {
+          !href.includes('?s=')) {
         
         let p = postsMap.get(href) || { url: href, title: '', thumb: '' };
         if (title.length > 5 && !p.title) p.title = title;

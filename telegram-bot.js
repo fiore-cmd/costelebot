@@ -1184,20 +1184,23 @@ function startBot() {
         const sizeMB = (fsize / 1024 / 1024).toFixed(1);
         log.ok(`[R34] Downloaded ${targetLink.label} (${sizeMB}MB)`);
         
+        if (fsize > 48 * 1024 * 1024) {
+          // Telegram Bot API hard limit: 50MB. File ini tidak bisa dikirim.
+          log.warn(`[R34] File terlalu besar untuk Telegram (${sizeMB}MB). Tolak.`);
+          await rimraf(jobDir);
+          return bot.editMessageText(
+            `⚠️ <b>${escHtml(post.title)}</b>\n\n❌ <b>${targetLink.label}</b> berukuran <b>${sizeMB}MB</b> — melebihi batas mutlak 50MB API Telegram.\n\n<i>Silakan pilih resolusi yang lebih rendah.</i>`, 
+            { chat_id: chatId, message_id: dlMsg.message_id, parse_mode: 'HTML',
+              reply_markup: { inline_keyboard: [[ { text: '🔙 Pilih Resolusi Lain', callback_data: `r34_${postIdx}` }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
+            }
+          );
+        }
+        
         bot.deleteMessage(chatId, dlMsg.message_id).catch(()=>{});
         
-        if (fsize <= 48 * 1024 * 1024) {
-          // Kirim sebagai video streamable
-          await bot.sendVideo(chatId, fs.createReadStream(dest), {
-            caption: `🎬 <b>${escHtml(post.title)}</b> (${targetLink.label}, ${sizeMB}MB)`, parse_mode: 'HTML', supports_streaming: true
-          });
-        } else {
-          // Kirim sebagai dokumen (support hingga 2GB via bot API lokal, ~50MB via cloud)
-          await bot.sendDocument(chatId, fs.createReadStream(dest), {
-            caption: `🎬 <b>${escHtml(post.title)}</b> (${targetLink.label}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`, 
-            parse_mode: 'HTML'
-          }, { filename: `${post.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.mp4` });
-        }
+        await bot.sendVideo(chatId, fs.createReadStream(dest), {
+          caption: `🎬 <b>${escHtml(post.title)}</b> (${targetLink.label}, ${sizeMB}MB)`, parse_mode: 'HTML', supports_streaming: true
+        });
         
         const nvMsg = await bot.sendMessage(chatId, `✨ <i>Video (${targetLink.label}, ${sizeMB}MB) berhasil dikirim!</i>`, {
           parse_mode: 'HTML',

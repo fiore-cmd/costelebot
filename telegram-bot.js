@@ -573,10 +573,22 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
          bot.editMessageText(txt, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' }).catch(()=>{});
       });
 
+      // Filter pelindung API Telegram: Batasan mutlak 50MB per file (video)
+      const validFiles = downloadedFiles.filter(f => {
+          if (!fs.existsSync(f)) return false;
+          return fs.statSync(f).size <= 48 * 1024 * 1024; // Threshold aman 48 MB
+      });
+      const rejectedCount = downloadedFiles.length - validFiles.length;
+
       // Hapus pesan progres
       bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
       
-      const chunks = chunkMediaByLimits(downloadedFiles);
+      if (validFiles.length === 0) {
+          await rimraf(jobDir);
+          return bot.sendMessage(chatId, `😔 Seluruh file di post ini adalah Video Raksasa (>50MB) yang ditolak mutlak oleh Server Telegram.\n\nSilakan coba post lain.`, { reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_kemono_reroll' } ]] } });
+      }
+
+      const chunks = chunkMediaByLimits(validFiles);
       for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           const mediaGroup = chunk.map((localFile, idx) => ({
@@ -599,7 +611,10 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           await sleep(CONFIG.SEND_DELAY); 
       }
       
-      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n✨ <i>Selesai! ${downloadedFiles.length} File premium berhasil dikirim.</i>`, {
+      let navText = `🍁 <b>${selectedPost.title}</b>\n\n✨ <i>Selesai! ${validFiles.length} File premium berhasil dikirim.</i>`;
+      if (rejectedCount > 0) navText += `\n⚠️ <i>${rejectedCount} video dilewati karena melebihi batas 50MB API Telegram!</i>`;
+      
+      const navMsg = await bot.sendMessage(chatId, navText, {
          parse_mode: 'HTML',
          reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
       });

@@ -27,13 +27,13 @@ const CONFIG = {
   ALLOWED_USER_IDS: [], // kosong = semua
   XAPIVERSE_KEY:    process.env.XAPIVERSE_KEY,
   XAPIVERSE_URL:    'https://xapiverse.com/api/terabox-pro',
+  LOCAL_API_URL:    process.env.LOCAL_API_URL || null,
   TEMP_DIR:         './tmp_downloads',
   IMAGE_EXTS:       ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
   POSTS_PER_PAGE:   8,
   SEND_DELAY:       600,
-  PHOTO_MAX_BYTES:  10 * 1024 * 1024,
-  VIDEO_MAX_BYTES:  50 * 1024 * 1024,
-  DOC_MAX_BYTES:    50 * 1024 * 1024,
+  // Limit dinamis: 48MB untuk Telegram biasa, atau 1950MB jika pakai Local API Server
+  VIDEO_MAX_BYTES:  process.env.LOCAL_API_URL ? 1950 * 1024 * 1024 : 48 * 1024 * 1024,
 };
 
 // ─── LOGGER & UTILS ──────────────────────────────────────────────────────────
@@ -734,9 +734,9 @@ async function doR34Gacha(bot, chatId) {
     // Hapus pesan loading
     bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
 
-    // Kirim video (atau dokumen jika >50MB)
+    // Kirim video (atau dokumen jika melebihi batas stream)
     try {
-      if (fsize <= 48 * 1024 * 1024) {
+      if (fsize <= CONFIG.VIDEO_MAX_BYTES) {
         await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
           caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)`,
           parse_mode: 'HTML', supports_streaming: true
@@ -860,7 +860,9 @@ async function sendMainMenu(bot, chatId) {
 }
 
 function startBot() {
-  const bot = new TelegramBot(CONFIG.BOT_TOKEN, { polling: true });
+  const botOptions = { polling: true };
+  if (CONFIG.LOCAL_API_URL) botOptions.baseApiUrl = CONFIG.LOCAL_API_URL;
+  const bot = new TelegramBot(CONFIG.BOT_TOKEN, botOptions);
   log.ok('Bot Telegram aktif ✅');
 
   // Set Telegram Menu Commands
@@ -1184,12 +1186,12 @@ function startBot() {
         const sizeMB = (fsize / 1024 / 1024).toFixed(1);
         log.ok(`[R34] Downloaded ${targetLink.label} (${sizeMB}MB)`);
         
-        if (fsize > 48 * 1024 * 1024) {
-          // Telegram Bot API hard limit: 50MB. File ini tidak bisa dikirim.
+        if (fsize > CONFIG.VIDEO_MAX_BYTES) {
+          // Telegram API hard limit.
           log.warn(`[R34] File terlalu besar untuk Telegram (${sizeMB}MB). Tolak.`);
           await rimraf(jobDir);
           return bot.editMessageText(
-            `⚠️ <b>${escHtml(post.title)}</b>\n\n❌ <b>${targetLink.label}</b> berukuran <b>${sizeMB}MB</b> — melebihi batas mutlak 50MB API Telegram.\n\n<i>Silakan pilih resolusi yang lebih rendah.</i>`, 
+            `⚠️ <b>${escHtml(post.title)}</b>\n\n❌ <b>${targetLink.label}</b> berukuran <b>${sizeMB}MB</b> — melebihi batas limit platform Telegram Anda saat ini (${Math.floor(CONFIG.VIDEO_MAX_BYTES/1024/1024)}MB).\n\n<i>Silakan pilih resolusi yang lebih rendah.</i>`, 
             { chat_id: chatId, message_id: dlMsg.message_id, parse_mode: 'HTML',
               reply_markup: { inline_keyboard: [[ { text: '🔙 Pilih Resolusi Lain', callback_data: `r34_${postIdx}` }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
             }

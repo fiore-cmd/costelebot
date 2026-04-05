@@ -51,8 +51,9 @@ async function parseVideoList(url) {
  * Menyedot katalog video (pencarian atau update terbaru).
  */
 async function scrapeListing(page = 1, query = null) {
+    // KVS search pagination menggunakan ?from=N, bukan /N/
     let url = query
-        ? `${BASE_URL}/search/${encodeURIComponent(query)}/${page > 1 ? page + '/' : ''}`
+        ? `${BASE_URL}/search/${encodeURIComponent(query)}/${page > 1 ? '?from=' + page : ''}`
         : `${BASE_URL}/latest-updates/${page}/`;
 
     return parseVideoList(url);

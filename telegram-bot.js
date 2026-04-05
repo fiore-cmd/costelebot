@@ -514,8 +514,9 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
   try {
       const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
       const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
-      const allUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
+      const rawUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
           .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|mp4|mov|webm)$/)); // Support images & videos
+      const allUrls = [...new Set(rawUrls)]; // Remove duplicate urls
       
       if (allUrls.length === 0) {
           return bot.editMessageText(`😔 <b>${selectedPost.title}</b>\n\nPost ini tidak berisi gambar yang didukung (mungkin isinya zip/teks saja). Coba gacha lagi!`, { 
@@ -531,10 +532,10 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
       const batchSize = 10;
       for (let i = 0; i < allUrls.length; i += batchSize) {
           const chunkUrls = allUrls.slice(i, i + batchSize);
-          const mediaGroup = chunkUrls.map(url => ({
+          const mediaGroup = chunkUrls.map((url, idx) => ({
               type: url.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'photo',
               media: url,
-              caption: i === 0 && chunkUrls[0] === url ? `🍁 <b>${selectedPost.title}</b>` : undefined,
+              caption: i === 0 && idx === 0 ? `🍁 <b>${selectedPost.title}</b>` : undefined,
               parse_mode: 'HTML'
           }));
           
@@ -673,12 +674,13 @@ function startBot() {
 
   bot.onText(/\/clear/, async (msg) => {
     log.info(`[User ${msg.chat.id}] Execute /clear (WIPING ALL)`);
-    const sentMsg = await bot.sendMessage(msg.chat.id, '🧹 <i>Tornado Pembersih Aktif! Menghapus seribu pesan terakhir...</i>', { parse_mode: 'HTML' });
+    const sentMsg = await bot.sendMessage(msg.chat.id, '🧹 <i>Tornado Pembersih Aktif! Menghapus seratus pesan terakhir...</i>', { parse_mode: 'HTML' });
     
-    // Looping mundur menghapus hingga 800 pesan terakhir untuk memberikan kesan "All"
-    // Tanpa merusak stack memory VPS.
-    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 800); i--) {
+    // Looping mundur menghapus hingga 80 pesan terakhir dengan delay
+    // Mencegah EFATAL: AggregateError akibat API/Socket exhaustion
+    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 80); i--) {
       bot.deleteMessage(msg.chat.id, i).catch(()=>{});
+      await sleep(35); // Delay 35ms untuk memberi nafas pada pool koneksi axios
     }
     
     // Hapus chat sapu bersihnya juga setelah beberapa detik

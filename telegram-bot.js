@@ -165,6 +165,9 @@ const botStats = {
   totalJobs: 0
 };
 
+// Escape HTML entities agar Telegram tidak crash saat judul mengandung < atau >
+function escHtml(str) { return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
 async function autoCleanOldMenu(bot, chatId, newMsgId) {
   const oldId = menuTracker.get(chatId);
   // Hapus menu lama jika ada
@@ -645,7 +648,7 @@ async function doR34Browse(bot, chatId, page = 1, query = null) {
     r34BrowseCache.set(chatId, { posts: shown, page, query });
 
     let text = `🎬 <b>Rule34Video</b> ${query ? `(Search: ${query})` : '(Terbaru)'} · Halaman ${page}\n\n`;
-    shown.forEach((p, i) => text += `${i+1}. ${p.title}\n`);
+    shown.forEach((p, i) => text += `${i+1}. ${escHtml(p.title)}\n`);
 
     const buttons = [];
     for (let i = 0; i < shown.length; i += 2) {
@@ -688,13 +691,13 @@ async function doR34Gacha(bot, chatId) {
     
     const links = await r34Scraper.scrapePostDetail(pick.link);
     if (!links.length) {
-      return bot.editMessageText(`😔 <b>${pick.title}</b>\n\nGagal mendapatkan link download. Coba reroll!`, { 
+      return bot.editMessageText(`😔 <b>${escHtml(pick.title)}</b>\n\nGagal mendapatkan link download. Coba reroll!`, { 
         chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll', callback_data: 'menu_r34_gacha' }, { text: '🔙 Menu', callback_data: 'menu_awal' } ]] }
       });
     }
 
-    await bot.editMessageText(`🎬 <b>${pick.title}</b>\n\n<i>⏳ Mengunduh video ke server lokal (auto-fallback resolusi)...</i>`, {
+    await bot.editMessageText(`🎬 <b>${escHtml(pick.title)}</b>\n\n<i>⏳ Mengunduh video ke server lokal (auto-fallback resolusi)...</i>`, {
       chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML'
     }).catch(()=>{});
 
@@ -735,12 +738,12 @@ async function doR34Gacha(bot, chatId) {
     try {
       if (fsize <= 48 * 1024 * 1024) {
         await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
-          caption: `🎬 <b>${pick.title}</b> (${dlLabel}, ${sizeMB}MB)`,
+          caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)`,
           parse_mode: 'HTML', supports_streaming: true
         });
       } else {
         await bot.sendDocument(chatId, fs.createReadStream(downloaded), {
-          caption: `🎬 <b>${pick.title}</b> (${dlLabel}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`,
+          caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`,
           parse_mode: 'HTML'
         }, { filename: `${pick.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.mp4` });
       }
@@ -768,7 +771,7 @@ async function doR34PostDetail(bot, chatId, post) {
   try {
     const links = await r34Scraper.scrapePostDetail(post.link);
     const idx = r34BrowseCache.get(chatId)?.posts?.indexOf(post) ?? 0;
-    let text = `🎬 <b>${post.title}</b>\n\n`;
+    let text = `🎬 <b>${escHtml(post.title)}</b>\n\n`;
 
     const buttons = [];
     if (links.length) {
@@ -1163,7 +1166,7 @@ function startBot() {
       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       
       const post = cache.posts[postIdx];
-      const dlMsg = await bot.sendMessage(chatId, `🎬 <b>${post.title}</b>\n\n<i>⏳ Mengunduh video...</i>`, { parse_mode: 'HTML' });
+      const dlMsg = await bot.sendMessage(chatId, `🎬 <b>${escHtml(post.title)}</b>\n\n<i>⏳ Mengunduh video...</i>`, { parse_mode: 'HTML' });
       
       try {
         const links = await r34Scraper.scrapePostDetail(post.link);
@@ -1186,12 +1189,12 @@ function startBot() {
         if (fsize <= 48 * 1024 * 1024) {
           // Kirim sebagai video streamable
           await bot.sendVideo(chatId, fs.createReadStream(dest), {
-            caption: `🎬 <b>${post.title}</b> (${targetLink.label}, ${sizeMB}MB)`, parse_mode: 'HTML', supports_streaming: true
+            caption: `🎬 <b>${escHtml(post.title)}</b> (${targetLink.label}, ${sizeMB}MB)`, parse_mode: 'HTML', supports_streaming: true
           });
         } else {
           // Kirim sebagai dokumen (support hingga 2GB via bot API lokal, ~50MB via cloud)
           await bot.sendDocument(chatId, fs.createReadStream(dest), {
-            caption: `🎬 <b>${post.title}</b> (${targetLink.label}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`, 
+            caption: `🎬 <b>${escHtml(post.title)}</b> (${targetLink.label}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`, 
             parse_mode: 'HTML'
           }, { filename: `${post.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.mp4` });
         }

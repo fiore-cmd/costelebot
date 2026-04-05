@@ -509,7 +509,7 @@ async function doCosplayteleGacha(bot, chatId) {
 }
 
 async function doKemonoGacha(bot, chatId, creatorUrl) {
-  const gMsg = await bot.sendMessage(chatId, '🍁 <b>Kemono Gacha...</b>\n<i>Menelusuri database Patreon dari vault Kemono.cr...</i>', { parse_mode: 'HTML' });
+  const gMsg = await bot.sendMessage(chatId, '🍁 <b>Patreon Gacha...</b>\n<i>Menelusuri database Patreon dari vault...</i>', { parse_mode: 'HTML' });
 
   try {
       const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
@@ -541,7 +541,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           try {
               await bot.sendMediaGroup(chatId, mediaGroup);
           } catch(e) {
-              log.error(`[Kemono Batch Send Error] ${e.message}`);
+              log.error(`[Patreon Batch Send Error] ${e.message}`);
           }
           await sleep(CONFIG.SEND_DELAY); 
       }
@@ -553,8 +553,8 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
       autoCleanOldMenu(bot, chatId, navMsg.message_id);
       
   } catch (e) {
-      log.error('Kemono Gacha gagal: ' + e.message);
-      bot.editMessageText(`❌ Error Kemono: ${e.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(()=>{});
+      log.error('Patreon Gacha gagal: ' + e.message);
+      bot.editMessageText(`❌ Error Patreon: ${e.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(()=>{});
   }
 }
 
@@ -603,7 +603,7 @@ async function sendMainMenu(bot, chatId) {
       inline_keyboard: [
         [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
         [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
-        [{ text: '🍁 Kemono Gacha Eksklusif', callback_data: 'menu_kemono_reroll' }],
+        [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
         [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
         [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
       ]
@@ -621,7 +621,7 @@ function startBot() {
     { command: '/start', description: 'Buka Menu Utama' },
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
-    { command: '/maple', description: '🍁 Gacha Exclusive Patreon Maple (Kemono)' },
+    { command: '/maple', description: '🍁 Gacha Patreon' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
     { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }

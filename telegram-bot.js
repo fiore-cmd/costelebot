@@ -12,6 +12,7 @@ const sharp                       = require('sharp'); // Auto-Compressor
 const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
 const mediafireApi                = require('./scrapers/mediafire');
+const kemonoScraper               = require('./scrapers/kemono');
 
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
 sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
@@ -507,6 +508,51 @@ async function doCosplayteleGacha(bot, chatId) {
   }
 }
 
+async function doKemonoGacha(bot, chatId, creatorUrl) {
+  const gMsg = await bot.sendMessage(chatId, '🍁 <b>Kemono Gacha...</b>\n<i>Menelusuri database Patreon dari vault Kemono.cr...</i>', { parse_mode: 'HTML' });
+  await autoCleanOldMenu(bot, chatId, gMsg.message_id);
+
+  try {
+      const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
+      await bot.editMessageText(`🍁 <b>Mendapatkan Post Eksklusif!</b>\n\n📌 <b>${selectedPost.title}</b>\n\n<i>⏳ Mengumpulkan tautan gambar secara diam-diam...</i>`, { 
+        chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' 
+      });
+      
+      const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
+      const allUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
+          .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/)); // Filter only images for mediagroup gacha
+      
+      if (allUrls.length === 0) {
+          return bot.editMessageText(`😔 <b>${selectedPost.title}</b>\n\nPost ini tidak berisi gambar yang didukung (mungkin isinya zip/teks saja). Coba gacha lagi!`, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' });
+      }
+
+      await bot.editMessageText(`🍁 <b>${selectedPost.title}</b>\n\n✅ Berhasil! Terdapat ${allUrls.length} gambar, memproses pengiriman ke Telegram...`, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' });
+      
+      // Batch into tens
+      const batchSize = 10;
+      for (let i = 0; i < allUrls.length; i += batchSize) {
+          const chunkUrls = allUrls.slice(i, i + batchSize);
+          const mediaGroup = chunkUrls.map(url => ({
+              type: 'photo',
+              media: url,
+              caption: i === 0 && chunkUrls[0] === url ? `🍁 <b>${selectedPost.title}</b>` : undefined,
+              parse_mode: 'HTML'
+          }));
+          
+          try {
+              await bot.sendMediaGroup(chatId, mediaGroup);
+          } catch(e) {
+              log.error(`[Kemono Batch Send Error] ${e.message}`);
+          }
+          await sleep(CONFIG.SEND_DELAY); 
+      }
+      
+  } catch (e) {
+      log.error('Kemono Gacha gagal: ' + e.message);
+      bot.editMessageText(`❌ Error Kemono: ${e.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(()=>{});
+  }
+}
+
 // ─── COSPLAYTELE BROWSE HANDLERS ─────────────────────────────────────────────
 async function doCosplayteleBrowse(bot, chatId, category = 'home', page = 1, query = null) {
   log.info(`[User ${chatId}] Request Cosplaytele (Cat: ${category}, Page: ${page}, Query: ${query || 'none'})`);
@@ -554,6 +600,7 @@ function startBot() {
     { command: '/start', description: 'Buka Menu Utama' },
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
+    { command: '/maple', description: '🍁 Gacha Exclusive Patreon Maple (Kemono)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
     { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
@@ -587,6 +634,12 @@ function startBot() {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
     log.info(`[User ${msg.chat.id}] Execute /gacha`);
     doCosplayteleGacha(bot, msg.chat.id);
+  });
+
+  bot.onText(/\/maple/, (msg) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
+    log.info(`[User ${msg.chat.id}] Execute /maple Kemono Gacha`);
+    doKemonoGacha(bot, msg.chat.id, 'https://kemono.cr/patreon/user/3295915');
   });
 
   bot.onText(/^\/search(?:\s+(.+))?$/, async (msg, match) => {

@@ -73,7 +73,8 @@ function collectFiles(dir) {
 
 function chunkMediaByLimits(medias) {
   const MAX_ITEMS = 10;
-  const MAX_BYTES = 45 * 1024 * 1024; // Limit gabungan upload Telegram Bot API (sekitar 45MB aman)
+  // Limit gabungan upload Telegram Bot API (sekitar 90% dari MAX_BYTES agar aman terhadap metadata tambahan)
+  const MAX_BYTES = Math.floor(CONFIG.VIDEO_MAX_BYTES * 0.9);
   
   const chunks = [];
   let currentChunk = [];
@@ -82,8 +83,8 @@ function chunkMediaByLimits(medias) {
   for (const mediaPath of medias) {
     const size = fs.existsSync(mediaPath) ? fs.statSync(mediaPath).size : 0;
     
-    // Jika ada satu file yang sendirian sudah jumbo (>45MB), kita paksa sendirian di chunk terpisah.
-    // Atau jika batas kuota 10 biji tercapai, atau batas gabungan 45MB tercapai... potong jadi chunk baru.
+    // Jika ada satu file yang sendirian sudah jumbo, kita paksa sendirian di chunk terpisah.
+    // Atau jika batas kuota 10 biji tercapai, atau batas gabungan tercapai... potong jadi chunk baru.
     if (currentChunk.length > 0 && (currentChunk.length >= MAX_ITEMS || currentSize + size >= MAX_BYTES)) {
         chunks.push(currentChunk);
         currentChunk = [];
@@ -265,7 +266,7 @@ async function sendOne(bot, chatId, filePath, explicitCaption = null) {
   const name = path.basename(filePath);
   const finalCaption = explicitCaption !== null ? explicitCaption : name;
   
-  if (size > 100 * 1024 * 1024) return; // Skip too large > 100MB completely
+  if (size > CONFIG.VIDEO_MAX_BYTES) return; // Skip jika melebihi platform limit
 
   if (isVideo(filePath) && size < CONFIG.VIDEO_MAX_BYTES) {
     try {
@@ -620,7 +621,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
       }
       
       let navText = `🍁 <b>${selectedPost.title}</b>\n\n✨ <i>Selesai! ${validFiles.length} File premium berhasil dikirim.</i>`;
-      if (rejectedCount > 0) navText += `\n⚠️ <i>${rejectedCount} video dilewati karena melebihi batas 50MB API Telegram!</i>`;
+      if (rejectedCount > 0) navText += `\n⚠️ <i>${rejectedCount} video dilewati karena melebihi kapasitas server Telegram Anda!</i>`;
       
       const navMsg = await bot.sendMessage(chatId, navText, {
          parse_mode: 'HTML',
@@ -737,19 +738,12 @@ async function doR34Gacha(bot, chatId) {
     // Hapus pesan loading
     bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
 
-    // Kirim video (atau dokumen jika melebihi batas stream)
+    // Kirim video
     try {
-      if (fsize <= CONFIG.VIDEO_MAX_BYTES) {
-        await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
-          caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)`,
-          parse_mode: 'HTML', supports_streaming: true
-        });
-      } else {
-        await bot.sendDocument(chatId, fs.createReadStream(downloaded), {
-          caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)\n<i>⚠️ Dikirim sebagai dokumen karena >50MB</i>`,
-          parse_mode: 'HTML'
-        }, { filename: `${pick.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.mp4` });
-      }
+      await bot.sendVideo(chatId, fs.createReadStream(downloaded), {
+        caption: `🎬 <b>${escHtml(pick.title)}</b> (${dlLabel}, ${sizeMB}MB)`,
+        parse_mode: 'HTML', supports_streaming: true
+      });
     } catch(e) {
       log.error(`[R34 Send Error] ${e.message}`);
     }

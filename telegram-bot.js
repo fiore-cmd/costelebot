@@ -224,11 +224,16 @@ async function extractArchive(archivePath, destDir, password = null) {
     let success = false;
     for (const pw of candidates) {
         try {
-            const pwFlag = pw ? `-p"${pw}"` : '-p""';
-            // Command 7z x untuk unzip/unrar tanpa membebani Node.js RAM (Menggunakan core P7zip OS Linux)
-            execSync(`7z x "${archivePath}" ${pwFlag} -o"${destDir}" -y`, { stdio: 'ignore' });
+            if (ext === '.zip') {
+                const pwFlag = pw ? `-p"${pw}"` : '';
+                execSync(`7z x "${archivePath}" ${pwFlag} -o"${destDir}" -y`, { stdio: 'ignore' });
+            } else {
+                // Untuk Linux VPS, .rar jauh lebih handal di-decode menggunakan modul unrar asli bawaan VPS
+                const pwFlag = pw ? `-p"${pw}"` : '-p-'; // -p- menolak password kosong prompt
+                execSync(`unrar x -y ${pwFlag} "${archivePath}" "${destDir}/"`, { stdio: 'ignore' });
+            }
             success = true;
-            log.ok(`Archive extracted via Native 7z (pw=${pw || 'none'})`);
+            log.ok(`Archive extracted via Native OS (pw=${pw || 'none'})`);
             break;
         } catch (e) { }
     }

@@ -9,7 +9,6 @@ const fsp                         = fs.promises;
 const path                        = require('path');
 // Modul unzipper dan node-unrar-js telah dinonaktifkan untuk menghemat RAM (Telah menggunakan native P7zip OS)
 const sharp                       = require('sharp'); // Auto-Compressor
-const sharp                       = require('sharp'); // Auto-Compressor
 const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
 const mediafireApi                = require('./scrapers/mediafire');

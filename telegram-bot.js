@@ -13,8 +13,9 @@ const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
 
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
-sharp.concurrency(1); // Cekik penggunaan CPU Sharp jadi 1 Core saja agar tidak loncat ke 100%
 sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
+// sharp.concurrency(1) sudah DICABUT. Mengembalikan Sharp ke multi-thread maksimum OS agar compress lebih ngebut!
+
 
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────

@@ -69,7 +69,8 @@ async function scrapePostDetail(postUrl) {
       gofile: null,
       sorafolder: null,
       telegram: null,
-      terabox: null
+      terabox: null,
+      mediafire: null
     };
 
     $('a[href]').each((i, el) => {
@@ -80,6 +81,7 @@ async function scrapePostDetail(postUrl) {
       else if (h.includes('sorafolder.com')) links.sorafolder = h;
       else if (h.includes('t.me')) links.telegram = h;
       else if (h.includes('terabox.com')) links.terabox = h;
+      else if (h.includes('mediafire.com')) links.mediafire = h;
     });
 
     return links;

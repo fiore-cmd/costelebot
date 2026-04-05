@@ -9,8 +9,10 @@ const fsp                         = fs.promises;
 const path                        = require('path');
 // Modul unzipper dan node-unrar-js telah dinonaktifkan untuk menghemat RAM (Telah menggunakan native P7zip OS)
 const sharp                       = require('sharp'); // Auto-Compressor
+const sharp                       = require('sharp'); // Auto-Compressor
 const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
+const mediafireApi                = require('./scrapers/mediafire');
 
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
 sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
@@ -437,6 +439,10 @@ async function sendPostDetail(bot, chatId, loadMsg, post, cacheIndex) {
       resText += `📁 <b>Gofile:</b> ${links.gofile}\n`;
       dlButtons.push([{ text: '⬇️ Download via Gofile (Auto)', callback_data: `dlgofile_${cacheIndex}` }]);
     }
+    if (links.mediafire) {
+      resText += `🔥 <b>MediaFire:</b> ${links.mediafire}\n`;
+      dlButtons.push([{ text: '⬇️ Download via MediaFire (Auto)', callback_data: `dlmediafire_${cacheIndex}` }]);
+    }
     if (links.sorafolder) resText += `📁 <b>Sorafolder:</b> ${links.sorafolder}\n`;
     if (links.terabox) resText += `📥 <b>TeraBox:</b> ${links.terabox}\n`;
   } else {
@@ -544,7 +550,6 @@ function startBot() {
     { command: '/start', description: 'Buka Menu Utama' },
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
-    { command: '/gacha34', description: '🟢 Rule34 Gacha (Single SSR Media)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
     { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
@@ -560,7 +565,6 @@ function startBot() {
         inline_keyboard: [
           [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
           [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
-          [{ text: '🟢 Gacha Khusus Rule34 SSR', callback_data: 'menu_gacha34' }],
           [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
           [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
         ]
@@ -603,29 +607,6 @@ function startBot() {
     }, 4000);
   });
 
-  bot.onText(/^\/gacha34(?:\s|$)/, async (msg) => {
-    bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
-    log.info(`[User ${msg.chat.id}] Execute /gacha34`);
-    
-    let sid = null;
-    const status = async (txt) => {
-      try {
-        if (!txt) { 
-            if (sid) bot.deleteMessage(msg.chat.id, sid).catch(()=>{}); 
-            return; 
-        }
-        if (!sid) {
-          const m = await bot.sendMessage(msg.chat.id, txt, { parse_mode: 'HTML' });
-          sid = m.message_id;
-        } else {
-          await bot.editMessageText(txt, { chat_id: msg.chat.id, message_id: sid, parse_mode: 'HTML' }).catch(()=>{});
-        }
-      } catch (e) {}
-    };
-    
-    const r34 = require('./scrapers/rule34');
-    await r34.doR34Gacha(bot, msg.chat.id, status);
-  });
 
   bot.onText(/^\/stats(?:\s|$)/, async (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
@@ -756,14 +737,7 @@ function startBot() {
       return sendMainMenu(bot, chatId);
     }
     
-    if (action === 'menu_gacha34' || action === 'gacha34_reroll') {
-      if (action === 'gacha34_reroll') bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
-      log.info(`[User ${chatId}] Hitungan Callback: ${action}`);
-      const r34 = require('./scrapers/rule34');
-      await status('🎲 <b>Rule34 Gacha:</b> Memanaskan mesin...');
-      await r34.doR34Gacha(bot, chatId, status);
-      return;
-    }
+    
     
     if (action === 'menu_stats') {
       const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
@@ -864,6 +838,30 @@ function startBot() {
          processDownload(bot, chatId, links.gofile, null, true).catch(e => log.error('process: ' + e.message));
       } else {
          bot.sendMessage(chatId, '⚠️ Link gofile tidak ditemukan untuk post ini.');
+      }
+    }
+    
+    // Auto MediaFire Download dari menu
+    if (action.startsWith('dlmediafire_')) {
+      const idx = parseInt(action.split('_')[1], 10);
+      const cache = browseCache.get(chatId);
+      if (!cache || !cache.posts[idx]) return;
+      const post = cache.posts[idx];
+      const links = await cosplayteleScraper.scrapePostDetail(post.url);
+      
+      if (links && links.mediafire) {
+         bot.sendMessage(chatId, '🔥 <b>Bypass MediaFire:</b> Mencari direct download link rahasia...', { parse_mode: 'HTML' }).then(async m => {
+             const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
+             if (directMFUrl) {
+                 bot.deleteMessage(chatId, m.message_id).catch(()=>{});
+                 // Mulai pengunduhan langsung, `isGofile` kita set `false` karena ia mendownload langsung file murni zip/rar
+                 processDownload(bot, chatId, directMFUrl, null, false).catch(e => log.error('process: ' + e.message));
+             } else {
+                 bot.editMessageText('⚠️ <b>Gagal!</b> Elemen download MediaFire tidak ditemukan karena proteksi.', { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
+             }
+         });
+      } else {
+         bot.sendMessage(chatId, '⚠️ Link mediafire tidak lagi tersedia untuk post ini.');
       }
     }
   });

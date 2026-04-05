@@ -1,5 +1,10 @@
 const { chromium } = require('playwright');
-const log = require('consola');
+
+const log = {
+  info:  (m) => console.log(`\x1b[36m[INFO]\x1b[0m  ${m}`),
+  ok:    (m) => console.log(`\x1b[32m[OK]\x1b[0m    ${m}`),
+  error: (m) => console.log(`\x1b[31m[ERROR]\x1b[0m ${m}`),
+};
 
 /**
  * Mendapatkan satu tautan post acak dari kreator kemono

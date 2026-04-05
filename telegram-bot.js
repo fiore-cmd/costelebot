@@ -589,10 +589,18 @@ function startBot() {
     doCosplayteleGacha(bot, msg.chat.id);
   });
 
-  bot.onText(/\/search (.+)/, (msg, match) => {
+  bot.onText(/^\/search(?:\s+(.+))?$/, async (msg, match) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
-    log.info(`[User ${msg.chat.id}] Execute /search ${match[1]}`);
-    doCosplayteleBrowse(bot, msg.chat.id, 'home', 1, match[1]);
+    const query = match[1];
+    if (query) {
+       log.info(`[User ${msg.chat.id}] Execute /search ${query}`);
+       doCosplayteleBrowse(bot, msg.chat.id, 'home', 1, query);
+    } else {
+       log.info(`[User ${msg.chat.id}] Execute /search (No Query)`);
+       userStates.set(msg.chat.id, { step: 'AWAITING_SEARCH_QUERY' });
+       const sentMsg = await bot.sendMessage(msg.chat.id, '🔍 <b>Pencarian Judul / Karakter</b>\n\nSilakan ketik nama karakter, nama cosplayer, atau judul apa saja di chat, lalu kirimkan:', { parse_mode: 'HTML' });
+       autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
+    }
   });
 
   bot.onText(/\/clear/, async (msg) => {

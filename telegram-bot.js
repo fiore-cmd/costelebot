@@ -515,7 +515,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
       const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
       const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
       const allUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
-          .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/)); // Filter only images for mediagroup gacha
+          .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|mp4|mov|webm)$/)); // Support images & videos
       
       if (allUrls.length === 0) {
           return bot.editMessageText(`😔 <b>${selectedPost.title}</b>\n\nPost ini tidak berisi gambar yang didukung (mungkin isinya zip/teks saja). Coba gacha lagi!`, { 
@@ -532,7 +532,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
       for (let i = 0; i < allUrls.length; i += batchSize) {
           const chunkUrls = allUrls.slice(i, i + batchSize);
           const mediaGroup = chunkUrls.map(url => ({
-              type: 'photo',
+              type: url.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'photo',
               media: url,
               caption: i === 0 && chunkUrls[0] === url ? `🍁 <b>${selectedPost.title}</b>` : undefined,
               parse_mode: 'HTML'

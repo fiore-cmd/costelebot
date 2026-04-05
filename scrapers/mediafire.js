@@ -18,8 +18,13 @@ async function getDirectLink(url) {
 
     const $ = cheerio.load(res.data);
     
-    // Tautan asli mediafire biasanya ada di `#downloadButton`
     let directLink = $('#downloadButton').attr('href');
+    
+    // Kadang MediaFire menyembunyikan link di atribut rahasia (enkripsi base64) demi proteksi
+    const scrambled = $('#downloadButton').attr('data-scrambled-url');
+    if (scrambled) {
+        try { directLink = Buffer.from(scrambled, 'base64').toString('utf-8'); } catch(e){}
+    }
     
     if (!directLink) {
         // Fallback jika ID kadang hilang atau berubah class `download_link`

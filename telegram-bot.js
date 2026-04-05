@@ -836,12 +836,12 @@ async function sendMainMenu(bot, chatId) {
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🔍 Cari Karakter / Album Cosplay', callback_data: 'menu_search' }],
+        [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
         [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
         [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
         [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
         [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
-        [{ text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
+        [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
       ]
     }
   });
@@ -921,12 +921,31 @@ function startBot() {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
     const query = match[1];
     if (query) {
+       // Jika ada query langsung, tampilkan pilihan sumber
        log.info(`[User ${msg.chat.id}] Execute /search ${query}`);
-       doCosplayteleBrowse(bot, msg.chat.id, 'home', 1, query);
+       const sentMsg = await bot.sendMessage(msg.chat.id, `🔍 <b>Cari: "${query}"</b>\n\nPilih sumber pencarian:`, {
+         parse_mode: 'HTML',
+         reply_markup: {
+           inline_keyboard: [
+             [{ text: '📚 Cosplaytele', callback_data: `dosearch_cosplay_${query}` }],
+             [{ text: '🎬 Rule34 Video', callback_data: `dosearch_r34_${query}` }],
+             [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+           ]
+         }
+       });
+       autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
     } else {
        log.info(`[User ${msg.chat.id}] Execute /search (No Query)`);
-       userStates.set(msg.chat.id, { step: 'AWAITING_SEARCH_QUERY' });
-       const sentMsg = await bot.sendMessage(msg.chat.id, '🔍 <b>Pencarian Judul / Karakter</b>\n\nSilakan ketik nama karakter, nama cosplayer, atau judul apa saja di chat, lalu kirimkan:', { parse_mode: 'HTML' });
+       const sentMsg = await bot.sendMessage(msg.chat.id, `🔍 <b>Pencarian Karakter</b>\n\nPilih sumber pencarian:`, {
+         parse_mode: 'HTML',
+         reply_markup: {
+           inline_keyboard: [
+             [{ text: '📚 Cari di Cosplaytele', callback_data: 'menu_search_cosplay' }],
+             [{ text: '🎬 Cari di Rule34 Video', callback_data: 'menu_search_r34' }],
+             [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+           ]
+         }
+       });
        autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
     }
   });
@@ -1195,16 +1214,45 @@ function startBot() {
       return;
     }
 
+    if (action === 'menu_clear') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      const sentMsg = await bot.sendMessage(chatId, '🧹 <i>Tornado Pembersih Aktif! Menghapus seratus pesan terakhir...</i>', { parse_mode: 'HTML' });
+      for (let i = query.message.message_id; i > Math.max(0, query.message.message_id - 80); i--) {
+        bot.deleteMessage(chatId, i).catch(()=>{});
+        await sleep(35);
+      }
+      setTimeout(() => { bot.deleteMessage(chatId, sentMsg.message_id).catch(()=>{}); }, 4000);
+      return;
+    }
+
     if (action === 'menu_terabox') {
       const msg = await bot.sendMessage(chatId, 'Silakan COPY paste link TeraBox.com langsung ke bot ini.');
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
     }
-    if (action === 'menu_search') {
+    if (action === 'menu_search_cosplay') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       userStates.set(chatId, { step: 'AWAITING_SEARCH_QUERY' });
-      const msg = await bot.sendMessage(chatId, '🔍 <b>Pencarian Judul / Karakter</b>\n\nSilakan ketik nama karakter, nama cosplayer, atau judul apa saja di kolom chat, lalu kirimkan:', { parse_mode: 'HTML' });
+      const msg = await bot.sendMessage(chatId, '📚 <b>Pencarian Cosplaytele</b>\n\nSilakan ketik nama karakter, cosplayer, atau judul:', { parse_mode: 'HTML' });
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
+    }
+    if (action === 'menu_search_r34') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      userStates.set(chatId, { step: 'AWAITING_R34_SEARCH' });
+      const msg = await bot.sendMessage(chatId, '🎬 <b>Pencarian Rule34Video</b>\n\nSilakan ketik tag atau nama karakter:', { parse_mode: 'HTML' });
+      autoCleanOldMenu(bot, chatId, msg.message_id);
+      return;
+    }
+    if (action.startsWith('dosearch_cosplay_')) {
+      const q = action.replace('dosearch_cosplay_', '');
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doCosplayteleBrowse(bot, chatId, 'home', 1, q);
+    }
+    if (action.startsWith('dosearch_r34_')) {
+      const q = action.replace('dosearch_r34_', '');
+      bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+      return doR34Browse(bot, chatId, 1, q);
     }
 
     // Pagination Cosplaytele

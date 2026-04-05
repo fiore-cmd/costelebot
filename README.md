@@ -1,46 +1,74 @@
-# 🎭 CosTeleBot (Ultimate Cosplay Scraper Bot)
+# 🎭 CosTeleBot (Ultimate Multi-Source Scraper Bot)
 
 ![Cosplay Scraper](https://img.shields.io/badge/Node.js-Telegram_Bot-blue)
-![Version](https://img.shields.io/badge/Version-1.0.0--Ultimate-success)
+![Version](https://img.shields.io/badge/Version-2.0.0--Apex-success)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+![Sources](https://img.shields.io/badge/Sources-5_Engines-orange)
 
-**CosTeleBot** adalah *engine* Telegram Bot multi-fungsional tingkat lanjut (Advanced) yang di desain spesifik untuk menelusuri, mengekstrak, dan mengirimkan arsip *High Quality Cosplay* dari sumber seperti `Cosplaytele` dan `4KHD` secara otomatis. Ditulis dengan Node.js dan dirancang siap *deploy* untuk server/VPS skala kecil maupun menengah.
+**CosTeleBot** adalah *engine* Telegram Bot multi-fungsional tingkat lanjut (Advanced) yang dirancang untuk menelusuri, mengekstrak, dan mengirimkan arsip *High Quality Cosplay, Patreon Leaks, dan Animasi 3D* dari berbagai sumber secara otomatis. Ditulis dengan Node.js dan dioptimalkan untuk server/VPS *low-end* dengan efisiensi memori ekstrem.
 
 ---
 
 ## 🔥 Fitur Utama (Features)
 
-🔹 **Cosplaytele Interactive Scraper:** Jelajahi ribuan *gallery* secara mulus langsung dari *chat* Telegram dengan antarmuka penomoran halaman pintar (*pagination*).  
-🔹 **Smart Gofile/Terabox Extractor:** Tidak perlu *copy-paste link*! Bot dapat mendeteksi _folder Gofile_ dan menembus antrean *password* Terabox (`4KHD`) menggunakan permesinan rahasia dari `xAPIverse`, semuanya terekstrak otomatis di belakang layar.  
-🔹 **Gacha Mode (Random SSR):** Bosan *search*? Tekan mode _Gacha_ (`/gacha`) untuk menerjunkan bot secara vertikal ke sembarang halaman web, lalu mengembalikan *Thumbnail SSR* acak!  
-🔹 **Telegram's MediaGroup Album Auto-Build:** Bot mengunggah ulang arsip `.ZIP` / `.RAR` raksasa dengan membaraikan isinya, dirakit dan dijadikan bentuk _Multiple-Images Album_ Telegram secara instan. Termasuk dukungan untuk otomatis-memutar berkas Video `.MP4`!  
-🔹 **Anti-Crash & Sharp Compressor Engine:** Sistem algoritma _Media Chunker_ yang mengkalkulasi bobot Payload Telegram 50MB. Dilengkapi integrasi modul `sharp` (*AI Compressor*) untuk diam-diam merampingkan resolusi foto raksasa (contoh: 4K 12MB) menjadi mode aman (ukuran standar) demi mencegah eror `PHOTO_INVALID_DIMENSIONS`.  
-🔹 **Auto-Clean UX (Wipe UI):** Riwayat komando menu pengguna selalu disapu bersih pada hitungan sepersekian detik menghasilkan tata letak chat yang bersih anti numpuk!
+### 📚 Cosplaytele Engine
+🔹 **Interactive Browser:** Jelajahi ribuan *gallery* langsung dari chat Telegram dengan *pagination* pintar.  
+🔹 **Search Engine:** Pencarian karakter/cosplayer secara interaktif maupun langsung via `/search <query>`.  
+🔹 **Gacha Mode (Random SSR):** Tekan `/gacha` untuk bot menerjunkan dirinya ke halaman acak dan mengembalikan *Thumbnail SSR* kejutan!
+
+### 🍁 Patreon Vault (Kemono.cr)
+🔹 **Kemono Scraper:** Menembus dinding Cloudflare menggunakan Playwright untuk mengekstrak konten kreator Patreon yang diarsipkan di `Kemono.cr`.  
+🔹 **Gacha Kreator Pool:** Sistem randomisasi dari kumpulan kreator eksklusif via `/maple`.  
+🔹 **Local Download Pipeline:** File didownload ke server lokal terlebih dahulu, lalu diunggah ke Telegram sebagai stream offline — mengatasi blokir CDN Cloudflare!  
+🔹 **Auto-Clear Reroll:** Saat Reroll, media gacha sebelumnya otomatis terhapus dari chat.
+
+### 🎬 Rule34Video Engine
+🔹 **Video Browser:** Jelajahi katalog video terbaru dengan navigasi halaman interaktif.  
+🔹 **Search by Tag:** Cari video berdasarkan tag/karakter spesifik via `/r34 <query>`.  
+🔹 **Video Gacha:** Mode acak untuk mendapat video kejutan dari seluruh database.  
+🔹 **Auto-Fallback Resolution:** Jika video 1080p melebihi batas 50MB Telegram, bot otomatis turun ke 720p → 480p → 360p hingga menemukan ukuran yang aman.  
+🔹 **Thumbnail Preview:** Lihat cover video dan detail resolusi sebelum memutuskan untuk mendownload.
+
+### ⬇️ Multi-Source Downloader
+🔹 **Gofile Extractor:** Deteksi otomatis folder Gofile, mendukung pemilihan file spesifik dari daftar isi.  
+🔹 **MediaFire Downloader:** Mengekstrak tautan asli (termasuk yang di-*scramble* via Base64).  
+🔹 **TeraBox / 4KHD Resolver:** Menembus antrean password TeraBox menggunakan xAPIverse.
+
+### 🛡️ Optimasi & Stabilitas
+🔹 **Sharp Compressor Engine:** Modul `sharp` merampingkan foto 4K raksasa demi mencegah error `PHOTO_INVALID_DIMENSIONS`.  
+🔹 **Native OS Extraction:** Menggunakan `7z` dan `unrar` native OS (bukan WASM) untuk efisiensi RAM maksimal.  
+🔹 **Media Chunker:** Kalkulasi otomatis payload 50MB Telegram, melindungi dari error `413 Request Entity Too Large`.  
+🔹 **Auto-Clean UX:** Riwayat menu dan pesan status selalu disapu bersih secara otomatis.  
+🔹 **Garbage Collector:** Mendukung `--expose-gc` untuk pembersihan memori manual di VPS low-end.
 
 ---
 
 ## 🚀 Panduan Instalasi (Deployment Guide)
 
 ### 1. Kebutuhan Sistem
-1. [Node.js](https://nodejs.org/en/) >= v18.0
-2. Package Manager (`npm` atau `yarn`)
-3. Server VPS (Opsional namun sangat disarankan via Linux Ubuntu/Debian)
+- [Node.js](https://nodejs.org/en/) >= v18.0
+- Package Manager (`npm`)
+- Server VPS Linux (Ubuntu/Debian direkomendasikan)
+- `p7zip-full` dan `unrar` (untuk ekstraksi arsip)
 
 ### 2. Cara Meng-install
 ```bash
-# Lakukan Clone Repositori
+# Clone Repositori
 git clone https://github.com/fiore-cmd/costelebot.git
 cd costelebot
 
-# Install seluruh Pustaka Dependensi (sangat wajib)
+# Install seluruh Pustaka Dependensi
 npm install
 
-# Instalasi Mesin Browser Web untuk Scraper Gofile
+# Install tools native OS (VPS Linux)
+sudo apt install p7zip-full unrar -y
+
+# Install Browser Engine untuk Scraper (Gofile & Kemono)
 npx playwright install
 ```
 
 ### 3. Setup Konfigurasi Kunci (Environment Variables)
-Anda WAJIB memberikan asupan "Kunci API" rahasia sebelum bot dijalankan. Buatlah file rahasia bernama `.env` di luar folder (sejajar dengan package.json).
+Buat file `.env` di root folder (sejajar dengan `package.json`):
 ```env
 BOT_TOKEN=8xxxxxxx:AAFz...                       # Token Telegram Bot
 XAPIVERSE_KEY=sk_882fd19...                      # Token Terabox Resolver 
@@ -50,16 +78,15 @@ XAPIVERSE_KEY=sk_882fd19...                      # Token Terabox Resolver
 
 ## 🏃 Menjalankan Bot di VPS (PM2 Mode)
 
-Bot didesain untuk menyala 24 jam penuh di baliknya. Gunakan `PM2` untuk menjaga ekosistem Bot Anda tidak pernah tidur.
-
 ```bash
-# Menyalakan untuk pertama kali
-npx pm2 start telegram-bot.js --name "costelebot"
+# Menyalakan untuk pertama kali (dengan GC support)
+npx pm2 start telegram-bot.js --name "costelebot" --node-args="--expose-gc"
 
-# Melihat riwayat kerja (Monitoring Log)
+# Monitoring Log
 npx pm2 logs costelebot
 
-# Restart sistem sewaktu waktu jika ada update code
+# Restart setelah update code
+git pull origin main
 npx pm2 restart costelebot
 ```
 
@@ -67,13 +94,43 @@ npx pm2 restart costelebot
 
 ## 🎮 Command Tersedia
 
-Ketikkan command berikut langsung di layar Telegram Bot Anda untuk bermanuver!
+| Command | Deskripsi |
+|---------|-----------|
+| `/start` | Membuka Menu Utama interaktif |
+| `/browse` | Jelajahi postingan Cosplaytele terbaru |
+| `/search <query>` | Cari karakter/cosplayer di Cosplaytele |
+| `/gacha` | 🎲 Gacha Cosplay acak (Surprise Me!) |
+| `/maple` | 🍁 Gacha Patreon eksklusif dari Kemono.cr |
+| `/r34` | 🎬 Menu Rule34Video (Browse, Search, Gacha) |
+| `/r34 <tag>` | 🎬 Cari video Rule34 berdasarkan tag |
+| `/stats` | 📊 Dashboard statistik server & performa |
+| `/clear` | 🧹 Hapus 80 pesan terakhir di chat |
 
-- `/start` - Menyiapkan pemanggilan Antarmuka Menu Utama GUI.
-- `/browse` - Memanggil perpustakaan `Cosplaytele`.
-- `/search <query>` - Langsung menusuk _database server_ lewat teks tertentu secara estetik.
-- `/gacha` - Merandom foto rilis terbaik (*Surprise me*!).
-- `/clear` - Tombak sihir yang menghilangkan 800 pesan obrolan di layar seketika!.
-- `/stats` - Dashboard eksklusif Intelijen. Mengintai memori VPS, trafik jaringan, dan seluruh tugas unduhan yang dibongkar. 
+---
+
+## 📁 Struktur Proyek
+
+```
+costelebot/
+├── telegram-bot.js           # Main bot controller
+├── scrapers/
+│   ├── cosplaytele.js        # Scraper Cosplaytele
+│   ├── gofile.js             # Extractor Gofile
+│   ├── mediafire.js          # Downloader MediaFire
+│   ├── kemono.js             # Scraper Kemono.cr (Playwright)
+│   └── rule34video.js        # Scraper Rule34Video
+├── .env                      # Environment variables (JANGAN DI-PUSH!)
+├── package.json
+└── README.md
+```
+
+---
+
+## ⚠️ Catatan Penting
+
+- **JANGAN** pernah mem-push file `.env` ke repositori publik!
+- Pastikan `p7zip-full` dan `unrar` terinstal di VPS sebelum menggunakan fitur ekstraksi arsip.
+- Bot dirancang untuk VPS low-end (1-2GB RAM). Penggunaan `sharp.cache(false)` dan native tools memastikan konsumsi memori tetap minimal.
+- Jika mengalami error `409 Conflict`, pastikan hanya **satu instance** bot yang berjalan.
 
 > *Developed with ❤️ by Fiore.*

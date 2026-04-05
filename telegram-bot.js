@@ -7,13 +7,15 @@ const fs                          = require('fs');
 const os                          = require('os');
 const fsp                         = fs.promises;
 const path                        = require('path');
-const unzipper                    = require('unzipper');
-const { createExtractorFromFile } = require('node-unrar-js');
+// Modul unzipper dan node-unrar-js telah dinonaktifkan untuk menghemat RAM (Telah menggunakan native P7zip OS)
 const sharp                       = require('sharp'); // Auto-Compressor
 const cosplayteleScraper          = require('./scrapers/cosplaytele');
 const gofileApi                   = require('./scrapers/gofile');
 
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
+sharp.concurrency(1); // Cekik penggunaan CPU Sharp jadi 1 Core saja agar tidak loncat ke 100%
+sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
+
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
@@ -131,6 +133,10 @@ async function sanitizeMediasForTelegram(medias, statusCallback) {
                
                // Ganti tracker array media ke file versi kurus
                medias[i] = outPath; 
+               
+               // Jeda 200 milidetik agar CPU sempat "bernapas" dan Garbace Collector berjalan
+               await new Promise(res => setTimeout(res, 200));
+               global.gc && global.gc();
            }
        } catch (err) {
            console.log(`Gagal mem-bypass resolusi untuk ${mPath}: ` + err.message);
@@ -209,26 +215,22 @@ async function downloadStream(url, destPath, onProgress, cookie = null) {
 async function extractArchive(archivePath, destDir, password = null) {
   await fsp.mkdir(destDir, { recursive: true });
   const ext = path.extname(archivePath).toLowerCase();
+  const { execSync } = require('child_process');
 
-  if (ext === '.zip') {
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(archivePath)
-        .pipe(unzipper.Extract({ path: destDir }))
-        .on('close', resolve).on('error', reject);
-    });
-  } else if (ext === '.rar') {
+  if (ext === '.zip' || ext === '.rar') {
     const candidates = [password, 'cosplaytele', '4KHD', '4khd', null].filter((p, i, arr) => arr.indexOf(p) === i);
     let success = false;
     for (const pw of candidates) {
-      try {
-        const extractor = await createExtractorFromFile({ filepath: archivePath, targetPath: destDir, password: pw || undefined });
-        const extractedFiles = [...extractor.extract().files];
-        success = true;
-        log.ok(`RAR extracted (pw=${pw || 'none'}): ${extractedFiles.length} file`);
-        break;
-      } catch (e) { }
+        try {
+            const pwFlag = pw ? `-p"${pw}"` : '-p""';
+            // Command 7z x untuk unzip/unrar tanpa membebani Node.js RAM (Menggunakan core P7zip OS Linux)
+            execSync(`7z x "${archivePath}" ${pwFlag} -o"${destDir}" -y`, { stdio: 'ignore' });
+            success = true;
+            log.ok(`Archive extracted via Native 7z (pw=${pw || 'none'})`);
+            break;
+        } catch (e) { }
     }
-    if (!success) throw new Error("Gagal ekstrak RAR, mungkin password salah/tidak didukung.");
+    if (!success) throw new Error("Gagal ekstrak Arsip via OS Native, password mungkin salah/corrupted.");
   }
 
   // Nested extract

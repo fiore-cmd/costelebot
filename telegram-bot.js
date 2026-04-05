@@ -525,16 +525,52 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           });
       }
 
+      await bot.editMessageText(`🍁 <b>${selectedPost.title}</b>\n\n<i>⏳ Target Cloudflare terkunci. Mengekstrak ${allUrls.length} media secara luring ke server lokal...</i>`, {
+          chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML'
+      }).catch(()=>{});
+
+      // Bikin direktori luring
+      const jobDir = path.join(CONFIG.TEMP_DIR, 'kemono_' + Date.now());
+      await fsp.mkdir(jobDir, { recursive: true });
+
+      let downloadedFiles = [];
+      for (let i = 0; i < allUrls.length; i++) {
+          const u = allUrls[i];
+          try {
+              const cleanUrl = u.split('?')[0]; 
+              let ext = path.extname(cleanUrl) || '.jpg';
+              if (!ext.match(/\.(jpg|jpeg|png|webp|gif|mp4|mov|webm)$/i)) ext = '.jpg'; // Fallback
+              const dest = path.join(jobDir, `media_${i}${ext}`);
+              
+              // Mengunduh diam-diam
+              await downloadStream(u, dest, null, null);
+              downloadedFiles.push(dest);
+          } catch(e) {
+              log.warn(`[Kemono DL] Gagal download ${u}`);
+          }
+      }
+
+      if (downloadedFiles.length === 0) {
+          await rimraf(jobDir);
+          return bot.editMessageText(`❌ Gagal mendownload isi media (Akses ditolak CDN/Kosong)`, { chat_id: chatId, message_id: gMsg.message_id });
+      }
+
+      await bot.editMessageText(`🍁 <b>${selectedPost.title}</b>\n\n<i>✓ Berhasil mendownload ${downloadedFiles.length} media. Memfilter ukuran raksasa...</i>`, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' }).catch(()=>{});
+
+      // Filter kompresor untuk memangkas ukuran raksasa melebihi 10MB
+      await sanitizeMediasForTelegram(downloadedFiles, (txt) => {
+         bot.editMessageText(txt, { chat_id: chatId, message_id: gMsg.message_id, parse_mode: 'HTML' }).catch(()=>{});
+      });
+
       // Hapus pesan progres
       bot.deleteMessage(chatId, gMsg.message_id).catch(()=>{});
       
-      // Batch into tens
-      const batchSize = 10;
-      for (let i = 0; i < allUrls.length; i += batchSize) {
-          const chunkUrls = allUrls.slice(i, i + batchSize);
-          const mediaGroup = chunkUrls.map((url, idx) => ({
-              type: url.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'photo',
-              media: url,
+      const chunks = chunkMediaByLimits(downloadedFiles);
+      for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const mediaGroup = chunk.map((localFile, idx) => ({
+              type: localFile.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'photo',
+              media: fs.createReadStream(localFile),
               caption: i === 0 && idx === 0 ? `🍁 <b>${selectedPost.title}</b>` : undefined,
               parse_mode: 'HTML'
           }));
@@ -547,11 +583,14 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           await sleep(CONFIG.SEND_DELAY); 
       }
       
-      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n<i>✓ Berhasil mengekstrak ${allUrls.length} lukisan HD.</i>`, {
+      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n<i>✓ Operasi Klandestin selesai. ${downloadedFiles.length} File berhasil diekstrak!</i>`, {
          parse_mode: 'HTML',
          reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
       });
       autoCleanOldMenu(bot, chatId, navMsg.message_id);
+      
+      // Bersihkan jejak
+      await rimraf(jobDir);
       
   } catch (e) {
       log.error('Patreon Gacha gagal: ' + e.message);

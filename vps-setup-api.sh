@@ -43,7 +43,7 @@ echo "🐳 Menyiapkan Container Telegram Bot API..."
 # Hapus container lama jika ada
 sudo docker rm -f telegram-bot-api &> /dev/null
 
-sudo docker run -d -p 8081:8081 \
+sudo docker run -d -p 127.0.0.1:8081:8081 \
   --name telegram-bot-api \
   --restart=always \
   -v telegram-bot-api-data:/var/lib/telegram-bot-api \

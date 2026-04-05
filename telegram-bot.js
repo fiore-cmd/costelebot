@@ -15,6 +15,8 @@ const mediafireApi                = require('./scrapers/mediafire');
 const kemonoScraper               = require('./scrapers/kemono');
 const r34Scraper                  = require('./scrapers/rule34video');
 
+const MENU_THUMB_PATH             = path.join(__dirname, 'reze.jpg');
+
 process.env.NTBA_FIX_350 = 1; // Fix node-telegram-bot-api deprecation warning
 sharp.cache(false);   // Matikan seluruh RAM cache agar RAM tidak bengkak
 // sharp.concurrency(1) sudah DICABUT. Mengembalikan Sharp ke multi-thread maksimum OS agar compress lebih ngebut!
@@ -841,21 +843,31 @@ async function doCosplayteleBrowse(bot, chatId, category = 'home', page = 1, que
   }
 }
 
-// ─── INIT BOT ────────────────────────────────────────────────────────────────
-async function sendMainMenu(bot, chatId) {
-  const sentMsg = await bot.sendMessage(chatId, `👋 <b>Costele Bot</b>\n\nPilih mode operasi:`, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
-        [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
-        [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
-        [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
-        [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
-        [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
-      ]
+// ─── INIT BOT & MENUS ────────────────────────────────────────────────────────
+async function sendMenuWithThumb(bot, chatId, text, keyboard) {
+  const opts = { parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } };
+  try {
+    if (fs.existsSync(MENU_THUMB_PATH)) {
+      opts.caption = text;
+      return await bot.sendPhoto(chatId, fs.createReadStream(MENU_THUMB_PATH), opts);
     }
-  });
+  } catch(e) { log.warn('Gagal kirim thumbnail: ' + e.message); }
+  
+  // Fallback text only
+  return await bot.sendMessage(chatId, text, opts);
+}
+
+async function sendMainMenu(bot, chatId) {
+  const text = `👋 <b>CosTele Bot</b>\n\nPilih mode operasi:`;
+  const keyboard = [
+    [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
+    [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
+    [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
+    [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
+    [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
+    [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
+  ];
+  const sentMsg = await sendMenuWithThumb(bot, chatId, text, keyboard);
   autoCleanOldMenu(bot, chatId, sentMsg.message_id);
 }
 
@@ -936,29 +948,23 @@ function startBot() {
     if (query) {
        // Jika ada query langsung, tampilkan pilihan sumber
        log.info(`[User ${msg.chat.id}] Execute /search ${query}`);
-       const sentMsg = await bot.sendMessage(msg.chat.id, `🔍 <b>Cari: "${query}"</b>\n\nPilih sumber pencarian:`, {
-         parse_mode: 'HTML',
-         reply_markup: {
-           inline_keyboard: [
-             [{ text: '📚 Cosplaytele', callback_data: `dosearch_cosplay_${query}` }],
-             [{ text: '🎬 Rule34 Video', callback_data: `dosearch_r34_${query}` }],
-             [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
-           ]
-         }
-       });
+       const text = `🔍 <b>Cari: "${query}"</b>\n\nPilih sumber pencarian:`;
+       const keyboard = [
+         [{ text: '📚 Cosplaytele', callback_data: `dosearch_cosplay_${query}` }],
+         [{ text: '🎬 Rule34 Video', callback_data: `dosearch_r34_${query}` }],
+         [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+       ];
+       const sentMsg = await sendMenuWithThumb(bot, msg.chat.id, text, keyboard);
        autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
     } else {
        log.info(`[User ${msg.chat.id}] Execute /search (No Query)`);
-       const sentMsg = await bot.sendMessage(msg.chat.id, `🔍 <b>Pencarian Karakter</b>\n\nPilih sumber pencarian:`, {
-         parse_mode: 'HTML',
-         reply_markup: {
-           inline_keyboard: [
-             [{ text: '📚 Cari di Cosplaytele', callback_data: 'menu_search_cosplay' }],
-             [{ text: '🎬 Cari di Rule34 Video', callback_data: 'menu_search_r34' }],
-             [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
-           ]
-         }
-       });
+       const text = `🔍 <b>Pencarian Karakter</b>\n\nPilih sumber pencarian:`;
+       const keyboard = [
+         [{ text: '📚 Cari di Cosplaytele', callback_data: 'menu_search_cosplay' }],
+         [{ text: '🎬 Cari di Rule34 Video', callback_data: 'menu_search_r34' }],
+         [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+       ];
+       const sentMsg = await sendMenuWithThumb(bot, msg.chat.id, text, keyboard);
        autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
     }
   });
@@ -1242,21 +1248,21 @@ function startBot() {
     }
 
     if (action === 'menu_terabox') {
-      const msg = await bot.sendMessage(chatId, 'Silakan COPY paste link TeraBox.com langsung ke bot ini.');
+      const msg = await sendMenuWithThumb(bot, chatId, '📥 <b>Manual Terabox</b>\n\nSilakan COPY & PASTE link TeraBox / 4KHD langsung ke chat bot ini.', [[{ text: '🔙 Kembali', callback_data: 'menu_awal' }]]);
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
     }
     if (action === 'menu_search_cosplay') {
       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       userStates.set(chatId, { step: 'AWAITING_SEARCH_QUERY' });
-      const msg = await bot.sendMessage(chatId, '📚 <b>Pencarian Cosplaytele</b>\n\nSilakan ketik nama karakter, cosplayer, atau judul:', { parse_mode: 'HTML' });
+      const msg = await sendMenuWithThumb(bot, chatId, '📚 <b>Pencarian Cosplaytele</b>\n\nSilakan ketik nama karakter, cosplayer, atau judul di kolom chat:', [[{ text: '🔙 Batal', callback_data: 'menu_awal' }]]);
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
     }
     if (action === 'menu_search_r34') {
       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
       userStates.set(chatId, { step: 'AWAITING_R34_SEARCH' });
-      const msg = await bot.sendMessage(chatId, '🎬 <b>Pencarian Rule34Video</b>\n\nSilakan ketik tag atau nama karakter:', { parse_mode: 'HTML' });
+      const msg = await sendMenuWithThumb(bot, chatId, '🎬 <b>Pencarian Rule34Video</b>\n\nSilakan ketik tag atau nama karakter di kolom chat:', [[{ text: '🔙 Batal', callback_data: 'menu_awal' }]]);
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
     }

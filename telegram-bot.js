@@ -583,7 +583,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
           await sleep(CONFIG.SEND_DELAY); 
       }
       
-      const navMsg = await bot.sendMessage(chatId, `🍁 <b>${selectedPost.title}</b>\n\n<i>✓ Operasi Klandestin selesai. ${downloadedFiles.length} File berhasil diekstrak!</i>`, {
+      const navMsg = await bot.sendMessage(chatId, `✨ <i>Selesai! ${downloadedFiles.length} File premium berhasil dikirim.</i>`, {
          parse_mode: 'HTML',
          reply_markup: { inline_keyboard: [[ { text: '🎲 Reroll Gacha', callback_data: 'menu_kemono_reroll' }, { text: '🔙 Menu Utama', callback_data: 'menu_awal' } ]] }
       });

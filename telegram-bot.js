@@ -777,7 +777,7 @@ async function doR34PostDetail(bot, chatId, post) {
         text += `• ${l.label}\n`;
         buttons.push([{ text: `⬇️ ${l.label}`, callback_data: `r34dlres_${idx}_${i}` }]);
       });
-      text += `\n<i>⚠️ File >50MB akan dikirim sebagai Dokumen.</i>`;
+      text += `\n<i>⚠️ Batas ukuran maksimal: ${Math.floor(CONFIG.VIDEO_MAX_BYTES/1024/1024)}MB.</i>`;
     } else {
       text += '⚠️ Tidak ada link download terdeteksi.';
     }

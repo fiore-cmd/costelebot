@@ -638,8 +638,13 @@ function startBot() {
 
   bot.onText(/\/maple/, (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{}); // Auto-clean
-    log.info(`[User ${msg.chat.id}] Execute /maple Kemono Gacha`);
-    doKemonoGacha(bot, msg.chat.id, 'https://kemono.cr/patreon/user/3295915');
+    const urls = [
+       'https://kemono.cr/patreon/user/3295915',
+       'https://kemono.cr/patreon/user/49965584'
+    ];
+    const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
+    log.info(`[User ${msg.chat.id}] Execute /maple Kemono Gacha (${pickedUrl})`);
+    doKemonoGacha(bot, msg.chat.id, pickedUrl);
   });
 
   bot.onText(/^\/search(?:\s+(.+))?$/, async (msg, match) => {

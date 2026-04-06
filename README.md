@@ -136,11 +136,4 @@ costelebot/
 
 ---
 
-## ⚠️ Catatan Penting
-
-- **JANGAN** pernah mem-push file `.env` ke repositori publik!
-- Pastikan `p7zip-full` dan `unrar` terinstal di VPS sebelum menggunakan fitur ekstraksi arsip.
-- Bot dirancang untuk VPS low-end (1-2GB RAM). Penggunaan `sharp.cache(false)` dan native tools memastikan konsumsi memori tetap minimal.
-- Jika mengalami error `409 Conflict`, pastikan hanya **satu instance** bot yang berjalan.
-
 > *Developed with ❤️ by Fiore.*

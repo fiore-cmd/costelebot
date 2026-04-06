@@ -32,7 +32,13 @@
 ### ⬇️ Multi-Source Downloader
 🔹 **Gofile Extractor:** Deteksi otomatis folder Gofile, mendukung pemilihan file spesifik dari daftar isi.  
 🔹 **MediaFire Downloader:** Mengekstrak tautan asli (termasuk yang di-*scramble* via Base64).  
+🔹 **SoraFolder Bypasser:** Playwright API menipu *timer limit* 10 detik SoraFolder untuk mengekstrak direct link.  
 🔹 **TeraBox / 4KHD Resolver:** Menembus antrean password TeraBox menggunakan xAPIverse.
+
+### 🚦 Queue Manager & Telemetry
+🔹 **Antrean Pintar (Queue System):** Mencegah kelebihan beban *server* akibat eksekusi massal pengguna. Secara bawaan membatasi maks 2 unduhan bersamaan dan perlindungan spam antrean *(maks 3 tugas per pengguna)*.  
+🔹 **Aktivitas RPG Hunter (`statsDb`):** Telemetri *database* mencatat setiap tetes poin *Experience (EXP)* dari Gacha dan Kuota Media yang diklaim oleh pengguna, dengan sistem pangkat berlapis.  
+🔹 **Dasbor Admin VPS:** Monitoring kondisi kesehatan Node.js dan RAM VPS murni dari Telegram untuk *Owner*.
 
 ### 🛡️ Optimasi & Stabilitas
 🔹 **Sharp Compressor Engine:** Modul `sharp` merampingkan foto 4K raksasa demi mencegah error `PHOTO_INVALID_DIMENSIONS`.  
@@ -103,8 +109,10 @@ npx pm2 restart costelebot
 | `/maple` | 🍁 Gacha Patreon eksklusif dari Kemono.cr |
 | `/r34` | 🎬 Menu Rule34Video (Browse, Search, Gacha) |
 | `/r34 <tag>` | 🎬 Cari video Rule34 berdasarkan tag |
-| `/stats` | 📊 Dashboard statistik server & performa |
-| `/clear` | 🧹 Hapus 80 pesan terakhir di chat |
+| `/tasks` | 🚦 Pantau Dasbor Antrean Eksekusi Server |
+| `/stats` | 🔰 Lihat Profil Lisensi Hunter (Tingkat Pangkat & EXP) |
+| `/stat` | 💻 Lihat Telemetri VPS & Memory (Khusus ID Admin) |
+| `/clear` | 🧹 Hapus jejak 800 pesan terakhir di obrolan |
 
 ---
 
@@ -117,8 +125,10 @@ costelebot/
 │   ├── cosplaytele.js        # Scraper Cosplaytele
 │   ├── gofile.js             # Extractor Gofile
 │   ├── mediafire.js          # Downloader MediaFire
+│   ├── sorafolder.js         # Bypasser SoraFolder (Playwright)
 │   ├── kemono.js             # Scraper Kemono.cr (Playwright)
 │   └── rule34video.js        # Scraper Rule34Video
+├── statsDb.js                # Database Telemetri & Ranking User
 ├── .env                      # Environment variables (JANGAN DI-PUSH!)
 ├── package.json
 └── README.md

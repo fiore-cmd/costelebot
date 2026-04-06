@@ -1124,13 +1124,12 @@ function startBot() {
 
     const uname = msg.chat.username ? `@${msg.chat.username}` : (msg.chat.first_name || 'Anonim');
 
-    const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
+    const txt = `🔰 <b>Profile</b>\n━━━━━━━━━━━━━━━━━━\n` +
       `👤 <b>Identitas:</b> ${uname}\n` +
       `🎯 <b>Peringkat Tuan:</b> ${rank}\n` +
-      `✨ <b>Hunter EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
+      `✨ <b>EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
       `🎁 <b>Gacha Dimainkan:</b> ${s.gachaCasts} Kali\n` +
-      `📦 <b>Media Dirampas:</b> ${totalMediaGb} Data Super HD\n` +
-      `⭐ <b>Koleksi Favorit:</b> ${s.favoriteCount} Berkas\n` +
+      `📦 <b>Media Terkirim:</b> ${totalMediaGb} Data Super HD\n` +
       `━━━━━━━━━━━━━━━━━━\n<i>Tingkatkan EXP untuk meraih Ranking Dewa!</i>`;
 
     const sentMsg = await bot.sendMessage(msg.chat.id, txt, { parse_mode: 'HTML' });
@@ -1337,6 +1336,7 @@ function startBot() {
       if (String(chatId) !== '6663343995') {
         return bot.answerCallbackQuery(query.id, { text: '⛔ Akses Ditolak: Anda bukan Admin Server!', show_alert: true });
       }
+      bot.answerCallbackQuery(query.id).catch(() => { });
 
       const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
       const hrs = Math.floor(uptimeSec / 3600);
@@ -1352,6 +1352,7 @@ function startBot() {
     }
 
     if (action === 'menu_profile') {
+      bot.answerCallbackQuery(query.id).catch(() => { });
       const s = statsDb.getUserStats(chatId);
       const exp = Math.floor(s.downloadBytes / (1024 * 1024)) + (s.gachaCasts * 50); // 1 MB = 1 EXP, 1 Gacha = 50 EXP
 
@@ -1362,10 +1363,10 @@ function startBot() {
       else if (exp >= 25000) rank = 'Senior ⚔️';
       else if (exp >= 5000) rank = 'Junior 🏹';
 
-      const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024 
-          ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' 
-          : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
-      
+      const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024
+        ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+        : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
+
       const uname = query.from.username ? `@${query.from.username}` : (query.from.first_name || 'Anonim');
 
       const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
@@ -1567,6 +1568,9 @@ function startBot() {
 }
 
 process.on('uncaughtException', (err) => log.error(`Uncaught: ${err.message}`));
-process.on('unhandledRejection', (err) => log.error(`Unhandled: ${err}`));
-
+process.on('unhandledRejection', (err) => {
+  if (err && err.message && err.message.includes('ETELEGRAM: 400 Bad Request: message to edit not found')) return; // Abaikan pesan yang sudah dihapus
+  if (err && err.message && err.message.includes('ETELEGRAM: 400 Bad Request: not Found')) return; // Abaikan pesan yang sudah dihapus
+  log.error(`Unhandled: ${err}`);
+});
 startBot();

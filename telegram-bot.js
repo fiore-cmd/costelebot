@@ -14,6 +14,7 @@ const gofileApi = require('./scrapers/gofile');
 const mediafireApi = require('./scrapers/mediafire');
 const kemonoScraper = require('./scrapers/kemono');
 const r34Scraper = require('./scrapers/rule34video');
+const historyTracker = require('./history');
 
 const MENU_THUMB_PATH = path.join(__dirname, 'reze.jpg');
 
@@ -502,7 +503,14 @@ async function doCosplayteleGacha(bot, chatId) {
       return bot.editMessageText('❌ Mesin Gacha sedang macet, coba lagi nanti.', { chat_id: chatId, message_id: gMsg.message_id });
     }
 
-    const randomPost = posts[Math.floor(Math.random() * posts.length)];
+    const unseenPosts = posts.filter(p => !historyTracker.hasSeen(chatId, 'cosplay', p.url));
+    const randomPost = unseenPosts.length > 0 
+      ? unseenPosts[Math.floor(Math.random() * unseenPosts.length)]
+      : posts[Math.floor(Math.random() * posts.length)]; // Fallback jika semua pernah dilihat
+    
+    // Tandai sudah dilihat
+    historyTracker.markSeen(chatId, 'cosplay', randomPost.url);
+
     // Sengaja overwrite cache index 0 agar tombol Download Gofile nyambung ke index ini
     browseCache.set(chatId, { posts: [randomPost], page: randPage, category: 'home', query: null, isGacha: true });
 
@@ -531,7 +539,7 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
   }
 
   try {
-    const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl);
+    const selectedPost = await kemonoScraper.getRandomKemonoPost(creatorUrl, chatId);
     const mediaUrls = await kemonoScraper.getKemonoPostMedia(selectedPost.href);
     const rawUrls = [...mediaUrls.inlineImgs, ...mediaUrls.links]
       .filter(u => u.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|mp4|mov|webm)$/)); // Support images & videos
@@ -690,7 +698,12 @@ async function doR34Gacha(bot, chatId) {
       });
     }
 
-    const pick = posts[Math.floor(Math.random() * posts.length)];
+    const unseenPosts = posts.filter(p => !historyTracker.hasSeen(chatId, 'r34', p.link));
+    const pick = unseenPosts.length > 0 
+      ? unseenPosts[Math.floor(Math.random() * unseenPosts.length)]
+      : posts[Math.floor(Math.random() * posts.length)];
+
+    historyTracker.markSeen(chatId, 'r34', pick.link);
     log.ok(`[R34] Gacha pick: ${pick.title}`);
 
     const links = await r34Scraper.scrapePostDetail(pick.link);

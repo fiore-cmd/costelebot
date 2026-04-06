@@ -9,7 +9,7 @@ const log = {
 /**
  * Mendapatkan satu tautan post acak dari kreator kemono
  */
-async function getRandomKemonoPost(creatorUrl) {
+async function getRandomKemonoPost(creatorUrl, chatId) {
     let browser;
     try {
         browser = await chromium.launch({ headless: true });
@@ -56,8 +56,15 @@ async function getRandomKemonoPost(creatorUrl) {
         
         if (posts.length === 0) throw new Error("Gagal! Tidak ada hasil post yang ditemukan di halaman kreator ini.");
         
-        // Pilih post random dari pool offset ini
-        const selectedPost = posts[Math.floor(Math.random() * posts.length)];
+        const historyTracker = require('../history');
+        const unseenPosts = posts.filter(p => !historyTracker.hasSeen(chatId, 'kemono', p.href));
+        
+        // Pilih post random dari pool unseen (atau fallback jika semua sudah dilihat)
+        const selectedPost = unseenPosts.length > 0
+            ? unseenPosts[Math.floor(Math.random() * unseenPosts.length)]
+            : posts[Math.floor(Math.random() * posts.length)];
+            
+        historyTracker.markSeen(chatId, 'kemono', selectedPost.href);
         log.ok(`[Kemono] Mendapatkan Post Targer Gacha: ${selectedPost.title}`);
         return selectedPost;
 

@@ -982,7 +982,7 @@ function startBot() {
 
     // Looping mundur menghapus hingga 800 pesan terakhir dengan delay
     // Mencegah EFATAL: AggregateError akibat API/Socket exhaustion
-    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 10000); i--) {
+    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 1000); i--) {
       bot.deleteMessage(msg.chat.id, i).catch(() => { });
       await sleep(25); // Delay 25ms untuk mempercepat namun tidak spamming
     }

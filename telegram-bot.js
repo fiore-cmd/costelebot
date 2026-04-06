@@ -4,8 +4,8 @@ require('dotenv').config(); // Load environment variables dari file .env
 // --- QUEUE MANAGER ---
 class DownloadQueue {
   constructor() {
-    this.queue = []; 
-    this.activeJobs = new Map(); 
+    this.queue = [];
+    this.activeJobs = new Map();
     this.jobCounter = 1;
     this.maxConcurrency = 2; // Maksimal 2 proses download+ekstrak bersamaan di VPS
     this.maxPerUser = 3;     // Maksimal 3 file ngantri di tas per pengguna (anti-spam)
@@ -13,17 +13,17 @@ class DownloadQueue {
 
   addJob(chatId, title, execFunc, bot) {
     // Cek beban aktif per Pengguna
-    const userJobs = this.queue.filter(j => j.chatId === chatId).length + 
-                     Array.from(this.activeJobs.values()).filter(j => j.chatId === chatId).length;
-    
+    const userJobs = this.queue.filter(j => j.chatId === chatId).length +
+      Array.from(this.activeJobs.values()).filter(j => j.chatId === chatId).length;
+
     if (userJobs >= this.maxPerUser) {
-      bot.sendMessage(chatId, `⛔ <b>Antrean Penuh!</b> Anda hanya diizinkan menitipkan maksimal ${this.maxPerUser} tugas unduhan (termasuk yang sedang berjalan). Harap tunggu hingga yang lama selesai.`, { parse_mode: 'HTML' }).catch(()=>{});
+      bot.sendMessage(chatId, `⛔ <b>Antrean Penuh!</b> Anda hanya diizinkan menitipkan maksimal ${this.maxPerUser} tugas unduhan (termasuk yang sedang berjalan). Harap tunggu hingga yang lama selesai.`, { parse_mode: 'HTML' }).catch(() => { });
       return false;
     }
 
     const job = { id: this.jobCounter++, chatId, title, execFunc, addedAt: Date.now() };
     this.queue.push(job);
-    
+
     this.checkQueue();
     return true;
   }
@@ -54,7 +54,7 @@ class DownloadQueue {
 
     log.info(`[Queue] Mengeksekusi Job #${nextJob.id} dari antrean (Taskers: ${this.activeJobs.size}/${this.maxConcurrency})`);
     try {
-      await nextJob.execFunc(nextJob.id); 
+      await nextJob.execFunc(nextJob.id);
     } catch (e) {
       log.error(`Queue Job #${nextJob.id} meledak: ${e.message}`);
     } finally {
@@ -589,10 +589,10 @@ async function doCosplayteleGacha(bot, chatId) {
     }
 
     const unseenPosts = posts.filter(p => !historyTracker.hasSeen(chatId, 'cosplay', p.url));
-    const randomPost = unseenPosts.length > 0 
+    const randomPost = unseenPosts.length > 0
       ? unseenPosts[Math.floor(Math.random() * unseenPosts.length)]
       : posts[Math.floor(Math.random() * posts.length)]; // Fallback jika semua pernah dilihat
-    
+
     // Tandai sudah dilihat
     historyTracker.markSeen(chatId, 'cosplay', randomPost.url);
 
@@ -786,7 +786,7 @@ async function doR34Gacha(bot, chatId) {
     }
 
     const unseenPosts = posts.filter(p => !historyTracker.hasSeen(chatId, 'r34', p.link));
-    const pick = unseenPosts.length > 0 
+    const pick = unseenPosts.length > 0
       ? unseenPosts[Math.floor(Math.random() * unseenPosts.length)]
       : posts[Math.floor(Math.random() * posts.length)];
 
@@ -957,6 +957,7 @@ async function sendMainMenu(bot, chatId) {
     [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
     [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
     [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
+    [{ text: '📊 Profile', callback_data: 'menu_stats' }]
     [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
     [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
   ];
@@ -1106,7 +1107,7 @@ function startBot() {
 
   bot.onText(/^\/stats(?:\s|$)/, async (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(() => { });
-    
+
     const s = statsDb.getUserStats(msg.chat.id);
     const exp = Math.floor(s.downloadBytes / (1024 * 1024)) + (s.gachaCasts * 50); // 1 MB = 1 EXP, 1 Gacha = 50 EXP
 
@@ -1117,10 +1118,10 @@ function startBot() {
     else if (exp >= 25000) rank = 'Senior ⚔️';
     else if (exp >= 5000) rank = 'Junior 🏹';
 
-    const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024 
-        ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' 
-        : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
-    
+    const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024
+      ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+      : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
+
     const uname = msg.chat.username ? `@${msg.chat.username}` : (msg.chat.first_name || 'Anonim');
 
     const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
@@ -1225,7 +1226,7 @@ function startBot() {
 
       const gofileUrl = state.url + '#file=' + fileId;
       userStates.delete(chatId);
-      
+
       queueManager.addJob(chatId, `Gofile (File ${fileId})`, async (jobId) => {
         await processDownload(bot, chatId, gofileUrl, null, 'gofile', jobId);
       }, bot);
@@ -1481,13 +1482,13 @@ function startBot() {
 
       if (links && links.mediafire) {
         queueManager.addJob(chatId, `MediaFire: ${post.title}`, async (jobId) => {
-           try {
-             queueManager.updateJob(jobId, '⚙️ Mencari direct link MediaFire...');
-             const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
-             await processDownload(bot, chatId, directMFUrl, null, 'direct', jobId);
-           } catch(e) {
-             bot.sendMessage(chatId, `⚠️ <b>Gagal (Job #${jobId})!</b> ${e.message}`, { parse_mode: 'HTML' });
-           }
+          try {
+            queueManager.updateJob(jobId, '⚙️ Mencari direct link MediaFire...');
+            const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
+            await processDownload(bot, chatId, directMFUrl, null, 'direct', jobId);
+          } catch (e) {
+            bot.sendMessage(chatId, `⚠️ <b>Gagal (Job #${jobId})!</b> ${e.message}`, { parse_mode: 'HTML' });
+          }
         }, bot);
       } else {
         bot.sendMessage(chatId, '⚠️ Link mediafire tidak lagi tersedia untuk post ini.');
@@ -1504,27 +1505,27 @@ function startBot() {
 
       if (links && links.sorafolder) {
         queueManager.addJob(chatId, `SoraFolder: ${post.title}`, async (jobId) => {
-           let m = await bot.sendMessage(chatId, '⏳ <b>Bypass SoraFolder:</b> Pekerja mulai meretas blokade 10 detik...', { parse_mode: 'HTML' }).catch(()=>{});
-           
-           let countdown = 12;
-           const timerInterval = setInterval(() => {
-             if (countdown > 0) {
-               if (m) bot.editMessageText(`⏳ <b>Bypass SoraFolder:</b> Melewati gerbang keamanan...\n<i>Menunggu paksa timer situs: <b>${countdown} detik</b></i>`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' }).catch(() => { });
-               queueManager.updateJob(jobId, `⚙️ Menembus Proteksi 10D (${countdown}s tersisa)...`);
-               countdown -= 2;
-             }
-           }, 2000);
+          let m = await bot.sendMessage(chatId, '⏳ <b>Bypass SoraFolder:</b> Pekerja mulai meretas blokade 10 detik...', { parse_mode: 'HTML' }).catch(() => { });
 
-           try {
-             const directSoraUrl = await sorafolderApi.getDirectLink(links.sorafolder);
-             clearInterval(timerInterval);
-             if (m) bot.deleteMessage(chatId, m.message_id).catch(() => { });
-             await processDownload(bot, chatId, directSoraUrl, null, 'direct', jobId);
-           } catch(e) {
-             clearInterval(timerInterval);
-             bot.sendMessage(chatId, `⚠️ <b>Gagal (Job #${jobId})!</b> ${e.message}`, { parse_mode: 'HTML' });
-             if (m) bot.deleteMessage(chatId, m.message_id).catch(() => { });
-           }
+          let countdown = 12;
+          const timerInterval = setInterval(() => {
+            if (countdown > 0) {
+              if (m) bot.editMessageText(`⏳ <b>Bypass SoraFolder:</b> Melewati gerbang keamanan...\n<i>Menunggu paksa timer situs: <b>${countdown} detik</b></i>`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' }).catch(() => { });
+              queueManager.updateJob(jobId, `⚙️ Menembus Proteksi 10D (${countdown}s tersisa)...`);
+              countdown -= 2;
+            }
+          }, 2000);
+
+          try {
+            const directSoraUrl = await sorafolderApi.getDirectLink(links.sorafolder);
+            clearInterval(timerInterval);
+            if (m) bot.deleteMessage(chatId, m.message_id).catch(() => { });
+            await processDownload(bot, chatId, directSoraUrl, null, 'direct', jobId);
+          } catch (e) {
+            clearInterval(timerInterval);
+            bot.sendMessage(chatId, `⚠️ <b>Gagal (Job #${jobId})!</b> ${e.message}`, { parse_mode: 'HTML' });
+            if (m) bot.deleteMessage(chatId, m.message_id).catch(() => { });
+          }
         }, bot);
       } else {
         bot.sendMessage(chatId, '⚠️ Link Sorafolder tidak lagi tersedia untuk post ini.');

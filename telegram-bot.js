@@ -978,13 +978,13 @@ function startBot() {
 
   bot.onText(/\/clear/, async (msg) => {
     log.info(`[User ${msg.chat.id}] Execute /clear (WIPING ALL)`);
-    const sentMsg = await bot.sendMessage(msg.chat.id, '🧹 <i>Tornado Pembersih Aktif! Menghapus seratus pesan terakhir...</i>', { parse_mode: 'HTML' });
+    const sentMsg = await bot.sendMessage(msg.chat.id, '🧹 <i>Tornado Pembersih Aktif! Menghapus hampir seribu riwayat pesan terakhir secara mendalam...</i>', { parse_mode: 'HTML' });
 
-    // Looping mundur menghapus hingga 80 pesan terakhir dengan delay
+    // Looping mundur menghapus hingga 800 pesan terakhir dengan delay
     // Mencegah EFATAL: AggregateError akibat API/Socket exhaustion
-    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 80); i--) {
+    for (let i = msg.message_id; i > Math.max(0, msg.message_id - 10000); i--) {
       bot.deleteMessage(msg.chat.id, i).catch(() => { });
-      await sleep(35); // Delay 35ms untuk memberi nafas pada pool koneksi axios
+      await sleep(25); // Delay 25ms untuk mempercepat namun tidak spamming
     }
 
     // Hapus chat sapu bersihnya juga setelah beberapa detik
@@ -1246,10 +1246,10 @@ function startBot() {
 
     if (action === 'menu_clear') {
       bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
-      const sentMsg = await bot.sendMessage(chatId, '🧹 <i>Tornado Pembersih Aktif! Menghapus seratus pesan terakhir...</i>', { parse_mode: 'HTML' });
-      for (let i = query.message.message_id; i > Math.max(0, query.message.message_id - 80); i--) {
+      const sentMsg = await bot.sendMessage(chatId, '🧹 <i>Tornado Pembersih Aktif! Menghapus hampir seribu riwayat pesan terakhir secara mendalam...</i>', { parse_mode: 'HTML' });
+      for (let i = query.message.message_id; i > Math.max(0, query.message.message_id - 800); i--) {
         bot.deleteMessage(chatId, i).catch(() => { });
-        await sleep(35);
+        await sleep(25);
       }
       setTimeout(() => { bot.deleteMessage(chatId, sentMsg.message_id).catch(() => { }); }, 4000);
       return;

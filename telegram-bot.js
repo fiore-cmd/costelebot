@@ -314,7 +314,7 @@ async function processDownload(bot, chatId, url, password, source = 'terabox') {
     let cookie = '';
     zipPath = '';
 
-    if (sourceType === 'gofile') {
+    if (source === 'gofile') {
       await status('⚙️ <b>Memproses isi link Gofile...</b>');
       log.info(`[Process] Memeriksa isi Gofile lewat Playwright...`);
       const gofileRes = await gofileApi.resolveGofile(url);
@@ -1404,13 +1404,23 @@ function startBot() {
       const links = await cosplayteleScraper.scrapePostDetail(post.url);
 
       if (links && links.sorafolder) {
-        bot.sendMessage(chatId, '⏳ <b>Bypass SoraFolder:</b> Bot menyamar secara diam-diam! Menunggu timer 10 detik...', { parse_mode: 'HTML' }).then(async m => {
+        bot.sendMessage(chatId, '⏳ <b>Bypass SoraFolder:</b> Memulai peretasan...', { parse_mode: 'HTML' }).then(async m => {
+          let countdown = 12;
+          const timerInterval = setInterval(() => {
+            if (countdown > 0) {
+              bot.editMessageText(`⏳ <b>Bypass SoraFolder:</b> Melewati gerbang keamanan...\n<i>Menunggu paksa timer situs asli: <b>${countdown} detik</b></i>`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' }).catch(() => { });
+              countdown -= 2;
+            }
+          }, 2000);
+
           try {
             const directSoraUrl = await sorafolderApi.getDirectLink(links.sorafolder);
+            clearInterval(timerInterval);
             bot.deleteMessage(chatId, m.message_id).catch(() => { });
             // Mulai pengunduhan langsung dengan link asli dari sorafolder
             processDownload(bot, chatId, directSoraUrl, null, 'direct').catch(e => log.error('process: ' + e.message));
           } catch(e) {
+            clearInterval(timerInterval);
             bot.editMessageText(`⚠️ <b>Gagal!</b> ${e.message}`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
           }
         });

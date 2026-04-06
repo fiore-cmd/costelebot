@@ -957,13 +957,13 @@ async function sendMainMenu(bot, chatId) {
     [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
     [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
     [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
-    [{ text: '📊 Profile', callback_data: 'menu_stats' }],
+    [{ text: '📊 Profile', callback_data: 'menu_profile' }],
     [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
     [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
   ];
 
   if (String(chatId) === '6663343995') {
-    keyboard.splice(4, 0, [{ text: '💻 Dasbor Admin', callback_data: 'menu_stats' }]);
+    keyboard.splice(4, 0, [{ text: '💻 Dasbor Admin', callback_data: 'menu_vps' }]);
   }
 
   const sentMsg = await sendMenuWithThumb(bot, chatId, text, keyboard);
@@ -1333,7 +1333,7 @@ function startBot() {
       }
       return;
     }
-    if (action === 'menu_stats') {
+    if (action === 'menu_vps') {
       if (String(chatId) !== '6663343995') {
         return bot.answerCallbackQuery(query.id, { text: '⛔ Akses Ditolak: Anda bukan Admin Server!', show_alert: true });
       }
@@ -1346,7 +1346,37 @@ function startBot() {
       const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(0);
       let dlFormatted = botStats.downloadedBytes > 1024 * 1024 * 1024 ? (botStats.downloadedBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' : (botStats.downloadedBytes / (1024 * 1024)).toFixed(2) + ' MB';
 
-      const txt = `📊 <b>Statistik Server Bot Canggih</b>\n━━━━━━━━━━━━━━━━━━\n⏳ <b>Uptime:</b> ${hrs} Jam ${mins} Menit\n💾 <b>RAM Node.js:</b> ${ramMB} MB\n🖥️ <b>RAM VPS Global:</b> Sisa ${freeMemMB} MB / ${totalMemMB} MB\n\n📈 <b>Aktivitas Kinerja:</b>\n🌐 Trafik Terkuras: <b>${dlFormatted}</b>\n✅ Total Dieksekusi: <b>${botStats.totalJobs}</b> Album\n📸 Media Terkirim: <b>${botStats.extractedFiles}</b> File\n━━━━━━━━━━━━━━━━━━`;
+      const txt = `💻 <b>Statistik Server VPS Global</b>\n━━━━━━━━━━━━━━━━━━\n⏳ <b>Uptime:</b> ${hrs} Jam ${mins} Menit\n💾 <b>RAM Node.js:</b> ${ramMB} MB\n🖥️ <b>RAM VPS:</b> Sisa ${freeMemMB} MB / ${totalMemMB} MB\n\n📈 <b>Kinerja Bot:</b>\n🌐 Trafik Disalurkan: <b>${dlFormatted}</b>\n✅ Total Eksekusi Terkirim: <b>${botStats.totalJobs}</b> \n━━━━━━━━━━━━━━━━━━`;
+      await bot.sendMessage(chatId, txt, { parse_mode: 'HTML' });
+      return;
+    }
+
+    if (action === 'menu_profile') {
+      const s = statsDb.getUserStats(chatId);
+      const exp = Math.floor(s.downloadBytes / (1024 * 1024)) + (s.gachaCasts * 50); // 1 MB = 1 EXP, 1 Gacha = 50 EXP
+
+      let rank = 'Newbie 🪓';
+      if (String(chatId) === '6663343995') rank = 'DEWA 👑👑👑 (Maha Kuasa)';
+      else if (exp >= 10000000) rank = 'DEWA 👑 (Legendary God)';
+      else if (exp >= 100000) rank = 'Legend 🐉';
+      else if (exp >= 25000) rank = 'Senior ⚔️';
+      else if (exp >= 5000) rank = 'Junior 🏹';
+
+      const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024 
+          ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' 
+          : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
+      
+      const uname = query.from.username ? `@${query.from.username}` : (query.from.first_name || 'Anonim');
+
+      const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
+        `👤 <b>Identitas:</b> ${uname}\n` +
+        `🎯 <b>Peringkat Tuan:</b> ${rank}\n` +
+        `✨ <b>Hunter EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
+        `🎁 <b>Gacha Dimainkan:</b> ${s.gachaCasts} Kali\n` +
+        `📦 <b>Media Dirampas:</b> ${totalMediaGb} Data Super HD\n` +
+        `⭐ <b>Koleksi Favorit:</b> ${s.favoriteCount} Berkas\n` +
+        `━━━━━━━━━━━━━━━━━━\n<i>Tingkatkan EXP untuk meraih Ranking Dewa!</i>`;
+
       await bot.sendMessage(chatId, txt, { parse_mode: 'HTML' });
       return;
     }

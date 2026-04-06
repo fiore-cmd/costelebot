@@ -12,6 +12,7 @@ const sharp = require('sharp'); // Auto-Compressor
 const cosplayteleScraper = require('./scrapers/cosplaytele');
 const gofileApi = require('./scrapers/gofile');
 const mediafireApi = require('./scrapers/mediafire');
+const sorafolderApi = require('./scrapers/sorafolder');
 const kemonoScraper = require('./scrapers/kemono');
 const r34Scraper = require('./scrapers/rule34video');
 const historyTracker = require('./history');
@@ -292,7 +293,7 @@ async function sendOne(bot, chatId, filePath, explicitCaption = null) {
   }
 }
 
-async function processDownload(bot, chatId, url, password, isGofile = false) {
+async function processDownload(bot, chatId, url, password, source = 'terabox') {
   log.info(`[User ${chatId}] Memulai processDownload: ${url}`);
   const tmpBase = path.join(CONFIG.TEMP_DIR, `job_${Date.now()}`);
   let zipPath = `${tmpBase}_raw.zip`;
@@ -308,11 +309,12 @@ async function processDownload(bot, chatId, url, password, isGofile = false) {
   try {
     await fsp.mkdir(CONFIG.TEMP_DIR, { recursive: true });
 
-    let downloadLink = null;
-    let fileName = 'archive.zip';
-    let cookie = null;
+    let downloadLink = '';
+    let fileName = '';
+    let cookie = '';
+    zipPath = '';
 
-    if (isGofile) {
+    if (sourceType === 'gofile') {
       await status('⚙️ <b>Memproses isi link Gofile...</b>');
       log.info(`[Process] Memeriksa isi Gofile lewat Playwright...`);
       const gofileRes = await gofileApi.resolveGofile(url);
@@ -354,6 +356,12 @@ async function processDownload(bot, chatId, url, password, isGofile = false) {
       downloadLink = targetFile.link;
       fileName = targetFile.name || 'gofile_archive.zip';
       cookie = gofileRes.cookie;
+      zipPath = `${tmpBase}_raw${path.extname(fileName)}`;
+    } else if (source === 'direct') {
+      await status('⚙️ <b>Menyambungkan tautan aslinya...</b>');
+      downloadLink = url;
+      // Gunakan nama akhir dari url jika memungkinkan
+      fileName = decodeURIComponent(url.split('/').pop().split('?')[0]) || 'archive.zip';
       zipPath = `${tmpBase}_raw${path.extname(fileName)}`;
     } else {
       await status('⚙️ <b>Mapping via xAPIverse...</b>');
@@ -458,7 +466,10 @@ async function sendPostDetail(bot, chatId, loadMsg, post, cacheIndex) {
       resText += `🔥 <b>MediaFire:</b> ${links.mediafire}\n`;
       dlButtons.push([{ text: '⬇️ Download via MediaFire (Auto)', callback_data: `dlmediafire_${cacheIndex}` }]);
     }
-    if (links.sorafolder) resText += `📁 <b>Sorafolder:</b> ${links.sorafolder}\n`;
+    if (links.sorafolder) {
+      resText += `🔥 <b>SoraFolder:</b> ${links.sorafolder}\n`;
+      dlButtons.push([{ text: '⬇️ Download via SoraFolder (Auto)', callback_data: `dlsorafolder_${cacheIndex}` }]);
+    }
     if (links.terabox) resText += `📥 <b>TeraBox:</b> ${links.terabox}\n`;
   } else {
     resText += 'Tidak ada link yang dikenali.';
@@ -1077,7 +1088,7 @@ function startBot() {
 
     if (text.includes('gofile.io')) {
       bot.sendMessage(chatId, '🔗 <b>Gofile Link Terdeteksi!</b> Memulai download otomatis...');
-      processDownload(bot, chatId, text, null, true).catch(e => log.error('process: ' + e.message));
+      processDownload(bot, chatId, text, null, 'gofile').catch(e => log.error('process: ' + e.message));
       return;
     }
   });
@@ -1113,7 +1124,7 @@ function startBot() {
       const gofileUrl = state.url + '#file=' + fileId;
       userStates.delete(chatId);
       bot.sendMessage(chatId, '🚀 Memulai download file spesifik dari Gofile...');
-      processDownload(bot, chatId, gofileUrl, null, true).catch(e => log.error('process: ' + e.message));
+      processDownload(bot, chatId, gofileUrl, null, 'gofile').catch(e => log.error('process: ' + e.message));
       return;
     }
 
@@ -1301,7 +1312,7 @@ function startBot() {
       if (action === 'src_4khd') {
         userStates.delete(chatId);
         bot.sendMessage(chatId, '✅ Menggunakan password default 4KHD. Memulai download...');
-        processDownload(bot, chatId, state.url, '4KHD').catch(() => { });
+        processDownload(bot, chatId, state.url, '4KHD', 'terabox').catch(() => { });
       } else {
         userStates.set(chatId, { step: 'AWAITING_PASSWORD', url: state.url });
         bot.sendMessage(chatId, '🔑 Silakan ketik <b>Password Arsip</b> dan kirim.\n<i>(Ketik SKIP jika tidak ada password)</i>', { parse_mode: 'HTML' });
@@ -1355,7 +1366,7 @@ function startBot() {
       const post = cache.posts[idx];
       const links = await cosplayteleScraper.scrapePostDetail(post.url);
       if (links && links.gofile) {
-        processDownload(bot, chatId, links.gofile, null, true).catch(e => log.error('process: ' + e.message));
+        processDownload(bot, chatId, links.gofile, null, 'gofile').catch(e => log.error('process: ' + e.message));
       } else {
         bot.sendMessage(chatId, '⚠️ Link gofile tidak ditemukan untuk post ini.');
       }
@@ -1374,14 +1385,37 @@ function startBot() {
           try {
             const directMFUrl = await mediafireApi.getDirectLink(links.mediafire);
             bot.deleteMessage(chatId, m.message_id).catch(() => { });
-            // Mulai pengunduhan langsung
-            processDownload(bot, chatId, directMFUrl, null, false).catch(e => log.error('process: ' + e.message));
+            processDownload(bot, chatId, directMFUrl, null, 'direct').catch(e => log.error('process: ' + e.message));
           } catch(e) {
             bot.editMessageText(`⚠️ <b>Gagal!</b> ${e.message}`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
           }
         });
       } else {
         bot.sendMessage(chatId, '⚠️ Link mediafire tidak lagi tersedia untuk post ini.');
+      }
+    }
+
+    // Auto SoraFolder Download dari menu
+    if (action.startsWith('dlsorafolder_')) {
+      const idx = parseInt(action.split('_')[1], 10);
+      const cache = browseCache.get(chatId);
+      if (!cache || !cache.posts[idx]) return;
+      const post = cache.posts[idx];
+      const links = await cosplayteleScraper.scrapePostDetail(post.url);
+
+      if (links && links.sorafolder) {
+        bot.sendMessage(chatId, '⏳ <b>Bypass SoraFolder:</b> Bot menyamar secara diam-diam! Menunggu timer 10 detik...', { parse_mode: 'HTML' }).then(async m => {
+          try {
+            const directSoraUrl = await sorafolderApi.getDirectLink(links.sorafolder);
+            bot.deleteMessage(chatId, m.message_id).catch(() => { });
+            // Mulai pengunduhan langsung dengan link asli dari sorafolder
+            processDownload(bot, chatId, directSoraUrl, null, 'direct').catch(e => log.error('process: ' + e.message));
+          } catch(e) {
+            bot.editMessageText(`⚠️ <b>Gagal!</b> ${e.message}`, { chat_id: chatId, message_id: m.message_id, parse_mode: 'HTML' });
+          }
+        });
+      } else {
+        bot.sendMessage(chatId, '⚠️ Link Sorafolder tidak lagi tersedia untuk post ini.');
       }
     }
   });

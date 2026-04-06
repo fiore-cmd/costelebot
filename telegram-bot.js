@@ -957,7 +957,7 @@ async function sendMainMenu(bot, chatId) {
     [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
     [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
     [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
-    [{ text: '📊 Profile', callback_data: 'menu_stats' }]
+    [{ text: '📊 Profile', callback_data: 'menu_stats' }],
     [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
     [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
   ];

@@ -1369,13 +1369,12 @@ function startBot() {
 
       const uname = query.from.username ? `@${query.from.username}` : (query.from.first_name || 'Anonim');
 
-      const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
+      const txt = `🔰 <b>Profile</b>\n━━━━━━━━━━━━━━━━━━\n` +
         `👤 <b>Identitas:</b> ${uname}\n` +
-        `🎯 <b>Peringkat Tuan:</b> ${rank}\n` +
-        `✨ <b>Hunter EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
+        `🎯 <b>Peringkat:</b> ${rank}\n` +
+        `✨ <b>EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
         `🎁 <b>Gacha Dimainkan:</b> ${s.gachaCasts} Kali\n` +
-        `📦 <b>Media Dirampas:</b> ${totalMediaGb} Data Super HD\n` +
-        `⭐ <b>Koleksi Favorit:</b> ${s.favoriteCount} Berkas\n` +
+        `📦 <b>Media Terkirim:</b> ${totalMediaGb} Data Super HD\n` +
         `━━━━━━━━━━━━━━━━━━\n<i>Tingkatkan EXP untuk meraih Ranking Dewa!</i>`;
 
       await bot.sendMessage(chatId, txt, { parse_mode: 'HTML' });

@@ -81,6 +81,7 @@ const sorafolderApi = require('./scrapers/sorafolder');
 const kemonoScraper = require('./scrapers/kemono');
 const r34Scraper = require('./scrapers/rule34video');
 const historyTracker = require('./history');
+const statsDb = require('./statsDb');
 
 const MENU_THUMB_PATH = path.join(__dirname, 'reze.jpg');
 
@@ -443,6 +444,9 @@ async function processDownload(bot, chatId, url, password, source = 'terabox', j
       await status(pText);
     }, cookie);
 
+    const finalSize = fs.existsSync(zipPath) ? fs.statSync(zipPath).size : 0;
+    if (finalSize > 0) statsDb.addDownloadSize(chatId, finalSize);
+
     // Tandai status jadi Ekstraksi
     if (jobId) queueManager.updateJob(jobId, '📦 Mengekstrak berkas arsip...');
 
@@ -575,6 +579,7 @@ async function sendPostDetail(bot, chatId, loadMsg, post, cacheIndex) {
 async function doCosplayteleGacha(bot, chatId) {
   const gMsg = await bot.sendMessage(chatId, '🎲 <b>Mengguncang Mesin Gacha...</b>\n<i>Mencari random album rahasia dari dimensi lain...</i>', { parse_mode: 'HTML' });
   await autoCleanOldMenu(bot, chatId, gMsg.message_id);
+  statsDb.addGacha(chatId);
 
   try {
     const randPage = Math.floor(Math.random() * 50) + 1; // Asumsi ada >50 page
@@ -608,6 +613,7 @@ async function doCosplayteleGacha(bot, chatId) {
 
 async function doKemonoGacha(bot, chatId, creatorUrl) {
   const gMsg = await bot.sendMessage(chatId, '🍁 <b>Patreon Gacha...</b>\n<i>Menelusuri database Patreon dari vault...</i>', { parse_mode: 'HTML' });
+  statsDb.addGacha(chatId);
 
   // Eksekusi pembersihan media gacha lama
   const oldMsgs = kemonoTracker.get(chatId) || [];
@@ -767,6 +773,7 @@ async function doR34Browse(bot, chatId, page = 1, query = null) {
 
 async function doR34Gacha(bot, chatId) {
   const gMsg = await bot.sendMessage(chatId, '🎬 <b>R34 Video Gacha...</b>\n<i>Mengacak konten dari database Rule34Video...</i>', { parse_mode: 'HTML' });
+  statsDb.addGacha(chatId);
 
   try {
     // Ambil halaman random (1-100)
@@ -1075,33 +1082,51 @@ function startBot() {
   });
 
 
-  bot.onText(/^\/stats(?:\s|$)/, async (msg) => {
+  bot.onText(/^\/stat(?:\s|$)/, async (msg) => {
     bot.deleteMessage(msg.chat.id, msg.message_id).catch(() => { });
-    log.info(`[User ${msg.chat.id}] Execute /stats`);
+    if (String(msg.chat.id) !== '6663343995') return; // Hanya admin ID 6663343995
 
     const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
     const hrs = Math.floor(uptimeSec / 3600);
     const mins = Math.floor((uptimeSec % 3600) / 60);
-
     const ramMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
     const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(0);
     const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(0);
 
-    // Format memory network size
-    let dlFormatted = 0;
-    if (botStats.downloadedBytes > 1024 * 1024 * 1024) dlFormatted = (botStats.downloadedBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-    else dlFormatted = (botStats.downloadedBytes / (1024 * 1024)).toFixed(2) + ' MB';
+    let dlFormatted = botStats.downloadedBytes > 1024 * 1024 * 1024 ? (botStats.downloadedBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' : (botStats.downloadedBytes / (1024 * 1024)).toFixed(2) + ' MB';
 
-    const txt = `📊 <b>Statistik Server Bot Canggih</b>\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `⏳ <b>Uptime:</b> ${hrs} Jam ${mins} Menit\n` +
-      `💾 <b>RAM Node.js:</b> ${ramMB} MB\n` +
-      `🖥️ <b>RAM VPS Global:</b> Sisa ${freeMemMB} MB / ${totalMemMB} MB\n\n` +
-      `📈 <b>Aktivitas Kinerja:</b>\n` +
-      `🌐 Trafik Terkuras: <b>${dlFormatted}</b>\n` +
-      `✅ Total Dieksekusi: <b>${botStats.totalJobs}</b> Album\n` +
-      `📸 Media Terkirim: <b>${botStats.extractedFiles}</b> File\n` +
-      `━━━━━━━━━━━━━━━━━━`;
+    const txt = `💻 <b>Statistik Server VPS Global</b>\n━━━━━━━━━━━━━━━━━━\n⏳ <b>Uptime:</b> ${hrs} Jam ${mins} Menit\n💾 <b>RAM Node.js:</b> ${ramMB} MB\n🖥️ <b>RAM VPS:</b> Sisa ${freeMemMB} MB / ${totalMemMB} MB\n\n📈 <b>Kinerja Bot:</b>\n🌐 Trafik Disalurkan: <b>${dlFormatted}</b>\n✅ Total Eksekusi Terkirim: <b>${botStats.totalJobs}</b> \n━━━━━━━━━━━━━━━━━━`;
+    const sentMsg = await bot.sendMessage(msg.chat.id, txt, { parse_mode: 'HTML' });
+    autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
+  });
+
+  bot.onText(/^\/stats(?:\s|$)/, async (msg) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(() => { });
+    
+    const s = statsDb.getUserStats(msg.chat.id);
+    const exp = Math.floor(s.downloadBytes / (1024 * 1024)) + (s.gachaCasts * 50); // 1 MB = 1 EXP, 1 Gacha = 50 EXP
+
+    let rank = 'Newbie 🪓';
+    if (String(msg.chat.id) === '6663343995') rank = 'DEWA 👑👑👑 (Maha Kuasa)';
+    else if (exp >= 10000000) rank = 'DEWA 👑 (Legendary God)';
+    else if (exp >= 100000) rank = 'Legend 🐉';
+    else if (exp >= 25000) rank = 'Senior ⚔️';
+    else if (exp >= 5000) rank = 'Junior 🏹';
+
+    const totalMediaGb = s.downloadBytes > 1024 * 1024 * 1024 
+        ? (s.downloadBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' 
+        : (s.downloadBytes / (1024 * 1024)).toFixed(2) + ' MB';
+    
+    const uname = msg.chat.username ? `@${msg.chat.username}` : (msg.chat.first_name || 'Anonim');
+
+    const txt = `🔰 <b>KARTU LISENSI HUNTER</b>\n━━━━━━━━━━━━━━━━━━\n` +
+      `👤 <b>Identitas:</b> ${uname}\n` +
+      `🎯 <b>Peringkat Tuan:</b> ${rank}\n` +
+      `✨ <b>Hunter EXP:</b> ${exp.toLocaleString('id-ID')} Pt\n\n` +
+      `🎁 <b>Gacha Dimainkan:</b> ${s.gachaCasts} Kali\n` +
+      `📦 <b>Media Dirampas:</b> ${totalMediaGb} Data Super HD\n` +
+      `⭐ <b>Koleksi Favorit:</b> ${s.favoriteCount} Berkas\n` +
+      `━━━━━━━━━━━━━━━━━━\n<i>Tingkatkan EXP untuk meraih Ranking Dewa!</i>`;
 
     const sentMsg = await bot.sendMessage(msg.chat.id, txt, { parse_mode: 'HTML' });
     autoCleanOldMenu(bot, msg.chat.id, sentMsg.message_id);
@@ -1404,7 +1429,7 @@ function startBot() {
 
       if (cache) {
         if (cache.isGacha) {
-          const sentMsg = await bot.sendMessage(chatId, `👋 <b>Cosplay & 4KHD Bot</b>\n\nPilih mode operasi:`, {
+          const sentMsg = await bot.sendMessage(chatId, `👋 <b>CosTele Bot</b>\n\nPilih mode operasi:`, {
             parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [

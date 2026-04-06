@@ -17,14 +17,13 @@ class DownloadQueue {
                      Array.from(this.activeJobs.values()).filter(j => j.chatId === chatId).length;
     
     if (userJobs >= this.maxPerUser) {
-      bot.sendMessage(chatId, `⛔ <b>Antrean Penuh!</b> Tuan hanya diizinkan menitipkan maksimal ${this.maxPerUser} tugas unduhan (termasuk yang sedang berjalan). Harap tunggu hingga yang lama selesai.`, { parse_mode: 'HTML' }).catch(()=>{});
+      bot.sendMessage(chatId, `⛔ <b>Antrean Penuh!</b> Anda hanya diizinkan menitipkan maksimal ${this.maxPerUser} tugas unduhan (termasuk yang sedang berjalan). Harap tunggu hingga yang lama selesai.`, { parse_mode: 'HTML' }).catch(()=>{});
       return false;
     }
 
     const job = { id: this.jobCounter++, chatId, title, execFunc, addedAt: Date.now() };
     this.queue.push(job);
     
-    bot.sendMessage(chatId, `⏳ <b>[#${job.id}] ${title}</b> masuk ke Gerbang Antrean!\n<i>Posisi Saat ini: #${this.queue.length}. Ketik /tasks untuk mengecek dasbor keseluruhan antrean.</i>`, { parse_mode: 'HTML' }).catch(()=>{});
     this.checkQueue();
     return true;
   }
@@ -959,9 +958,13 @@ async function sendMainMenu(bot, chatId) {
     [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
     [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
     [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
-    [{ text: '📊 Statistik & Kesehatan Bot', callback_data: 'menu_stats' }],
     [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
   ];
+
+  if (String(chatId) === '6663343995') {
+    keyboard.splice(4, 0, [{ text: '💻 Dasbor Admin', callback_data: 'menu_stats' }]);
+  }
+
   const sentMsg = await sendMenuWithThumb(bot, chatId, text, keyboard);
   autoCleanOldMenu(bot, chatId, sentMsg.message_id);
 }
@@ -980,7 +983,8 @@ function startBot() {
     { command: '/maple', description: '🍁 Gacha Patreon' },
     { command: '/r34', description: '🎬 Rule34 Video (Browse & Gacha)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
-    { command: '/stats', description: '📊 Lihat Laporan Statistik Server' },
+    { command: '/tasks', description: '🚦 Pantau Dasbor Antrean (Queue Manager)' },
+    { command: '/stats', description: '🔰 Lihat Profil & Pangkat Hunter (RPG)' },
     { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
   ]).catch(() => log.warn('Gagal set command menu.'));
 
@@ -1329,6 +1333,10 @@ function startBot() {
       return;
     }
     if (action === 'menu_stats') {
+      if (String(chatId) !== '6663343995') {
+        return bot.answerCallbackQuery(query.id, { text: '⛔ Akses Ditolak: Anda bukan Admin Server!', show_alert: true });
+      }
+
       const uptimeSec = Math.floor((Date.now() - botStats.startTime) / 1000);
       const hrs = Math.floor(uptimeSec / 3600);
       const mins = Math.floor((uptimeSec % 3600) / 60);

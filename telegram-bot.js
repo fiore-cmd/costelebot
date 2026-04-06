@@ -983,9 +983,9 @@ function startBot() {
     { command: '/maple', description: '🍁 Gacha Patreon' },
     { command: '/r34', description: '🎬 Rule34 Video (Browse & Gacha)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
-    { command: '/tasks', description: '🚦 Pantau Dasbor Antrean (Queue Manager)' },
-    { command: '/stats', description: '🔰 Lihat Profil & Pangkat Hunter (RPG)' },
-    { command: '/clear', description: '🧹 Bersihkan Seluruh Layar (Wipe History)' }
+    { command: '/tasks', description: '🚦 Pantau Dasbor Antrean' },
+    { command: '/stats', description: '🔰 Lihat Profil' },
+    { command: '/clear', description: '🧹 Bersihkan Seluruh Chat' }
   ]).catch(() => log.warn('Gagal set command menu.'));
 
   // Menus

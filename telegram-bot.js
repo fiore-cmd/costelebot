@@ -78,6 +78,7 @@ const gofileApi = require('./scrapers/gofile');
 const mediafireApi = require('./scrapers/mediafire');
 const sorafolderApi = require('./scrapers/sorafolder');
 const kemonoScraper = require('./scrapers/kemono');
+const pinterestScraper = require('./scrapers/pinterest');
 const r34Scraper = require('./scrapers/rule34video');
 const historyTracker = require('./history');
 const statsDb = require('./statsDb');
@@ -224,7 +225,10 @@ async function sanitizeMediasForTelegram(medias, statusCallback) {
 const userStates = new Map();
 const browseCache = new Map(); // chatId -> { posts: [], page, category, query }
 const menuTracker = new Map(); // chatId -> lastMessageId (Untuk auto-clean menu lama)
-const kemonoTracker = new Map(); // chatId -> array of message_ids (Untuk auto-clean media gacha)
+const kemonoTracker = new Map(); // chatId -> message_id untuk auto-clean gacha
+const sfwTracker = new Map(); // chatId -> message_id untuk auto-clean sfw gacha
+const pinterestScrapeCache = new Map(); // caching hasil playwright agar reroll sangat cepat
+const pinterestCache = new Map(); // chatId -> { pins, query } untuk cache search detail 4 image
 const r34BrowseCache = new Map(); // chatId -> { posts: [], page, query }
 
 // ─── ADMIN STATS TRACKER ─────────────────────────────────────────────────────
@@ -732,6 +736,155 @@ async function doKemonoGacha(bot, chatId, creatorUrl) {
   }
 }
 
+async function downloadPinterestImage(url) {
+  try {
+    const res = await axios.get(url, { responseType: 'arraybuffer' });
+    return Buffer.from(res.data, 'binary');
+  } catch (err) {
+    if (url.includes('/originals/')) { // Fallback 736x
+      const fallbackUrl = url.replace('/originals/', '/736x/');
+      const res = await axios.get(fallbackUrl, { responseType: 'arraybuffer' });
+      return Buffer.from(res.data, 'binary');
+    }
+    throw err;
+  }
+}
+
+// ─── SFW PINTEREST HANDLERS ──────────────────────────────────────────────────
+async function doSFWGacha(bot, chatId, query = 'anime') {
+  const gMsg = await bot.sendMessage(chatId, `🌸 <b>SFW Gacha...</b>\n<i>Menelusuri Pinterest...</i>`, { parse_mode: 'HTML' });
+  statsDb.addGacha(chatId);
+
+  // Bersihkan gacha sfw sebelumnya
+  const oldMsgId = sfwTracker.get(chatId);
+  if (oldMsgId) bot.deleteMessage(chatId, oldMsgId).catch(() => {});
+
+  try {
+    let pins;
+    const cacheData = pinterestScrapeCache.get(query);
+    if (cacheData && Date.now() - cacheData.timestamp < 1000 * 60 * 60) {
+      pins = cacheData.pins; // Hit Cache (Instant reload)
+    } else {
+      pins = await pinterestScraper.scrapePinterest(query);
+      pinterestScrapeCache.set(query, { pins, timestamp: Date.now() });
+    }
+
+    if (!pins || pins.length === 0) throw new Error("Kosong");
+
+    // Filter yang belum pernah dilihat user
+    let unseenPins = pins.filter(p => !historyTracker.hasSeen(chatId, 'pinterest', p.imgUrl));
+    if (unseenPins.length === 0) {
+      // Jika semua sudah dilihat, ambil sembarang dari semua
+      unseenPins = pins;
+    }
+
+    const picked = unseenPins[Math.floor(Math.random() * unseenPins.length)];
+    historyTracker.markSeen(chatId, 'pinterest', picked.imgUrl);
+
+    let captionTitle = picked.title;
+    if (captionTitle.length > 100) captionTitle = captionTitle.substring(0, 97) + '...';
+
+    const caption = `🌸 <b>SFW Gacha</b>\n`;
+    
+    await bot.deleteMessage(chatId, gMsg.message_id).catch(() => {});
+    
+    // Download manual via Axios agar tidak 400 Bad Request di Telegram
+    const imageBuffer = await downloadPinterestImage(picked.imgUrl);
+
+    const sentMsg = await bot.sendPhoto(chatId, imageBuffer, {
+      caption: caption,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🎲 Reroll SFW', callback_data: `menu_sfw_reroll:${query}` }],
+          [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
+        ]
+      }
+    });
+
+    sfwTracker.set(chatId, sentMsg.message_id);
+
+  } catch (error) {
+    log.error('SFW Gacha gagal: ' + error.message);
+    bot.editMessageText(`❌ Error SFW Gacha: ${error.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(() => {});
+  }
+}
+
+async function doPinterestSearch(bot, chatId, query, showPreview = true) {
+  const loadMsg = await bot.sendMessage(chatId, `🔍 <b>Mencari "${escHtml(query)}" di Pinterest...</b>`, { parse_mode: 'HTML' });
+  await autoCleanOldMenu(bot, chatId, loadMsg.message_id);
+
+  try {
+    let pins;
+    const cacheData = pinterestScrapeCache.get(query);
+    if (cacheData && Date.now() - cacheData.timestamp < 1000 * 60 * 60) {
+      pins = cacheData.pins;
+    } else {
+      pins = await pinterestScraper.scrapePinterest(query);
+      pinterestScrapeCache.set(query, { pins, timestamp: Date.now() });
+    }
+
+    if (!pins || pins.length === 0) {
+      return bot.editMessageText('⚠️ Tidak ada pin ditemukan untuk pencarian tersebut.', { chat_id: chatId, message_id: loadMsg.message_id });
+    }
+
+    // Tampilkan 10 foto di menu list
+    const topPins = pins.slice(0, 10);
+    let previewMsgIds = [];
+
+    if (showPreview) {
+      // Ambil 4 foto teratas untuk di-preview
+      const previewPins = topPins.slice(0, 4);
+      
+      const buffers = await Promise.all(
+        previewPins.map(pin => downloadPinterestImage(pin.imgUrl).catch(() => null))
+      );
+
+      const mediaGroup = previewPins.map((pin, idx) => ({
+        type: 'photo',
+        media: buffers[idx] ? buffers[idx] : pin.imgUrl
+      }));
+      
+      const sentGroup = await bot.sendMediaGroup(chatId, mediaGroup);
+      previewMsgIds = sentGroup.map(m => m.message_id);
+    }
+
+    // Simpan di cache untuk Detail Button & Auto-Clear Preview
+    pinterestCache.set(chatId, { pins: topPins, query, previewMsgIds });
+
+    // Pesan menu
+    let text = `🌸 <b>Hasil Pencarian: ${escHtml(query)}</b>\n\n`;
+    const buttons = [];
+    
+    topPins.forEach((p, i) => {
+      let title = p.title;
+      if (title.length > 50) title = title.substring(0, 47) + '...';
+      text += `${i + 1}. ${escHtml(title)}\n`;
+      
+      // Susun 2 tombol per baris
+      if (i % 2 === 0) {
+        buttons.push([{ text: `🎬 Detail Foto ${i + 1}`, callback_data: `pin_detail_${i}` }]);
+      } else {
+        buttons[buttons.length - 1].push({ text: `🎬 Detail Foto ${i + 1}`, callback_data: `pin_detail_${i}` });
+      }
+    });
+    
+    buttons.push([{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]);
+
+    await bot.deleteMessage(chatId, loadMsg.message_id).catch(() => {});
+    const menuMsg = await bot.sendMessage(chatId, text, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: buttons }
+    });
+    
+    await autoCleanOldMenu(bot, chatId, menuMsg.message_id);
+
+  } catch (err) {
+    bot.editMessageText(`❌ Gagal: ${err.message}`, { chat_id: chatId, message_id: loadMsg.message_id }).catch(() => { });
+  }
+}
+
+
 // ─── RULE34VIDEO HANDLERS ────────────────────────────────────────────────────
 async function doR34Browse(bot, chatId, page = 1, query = null) {
   log.info(`[User ${chatId}] Request R34Video (Page: ${page}, Query: ${query || 'none'})`);
@@ -955,15 +1108,17 @@ async function sendMainMenu(bot, chatId) {
   const text = `👋 <b>CosTele Bot</b>\n\nPilih mode operasi:`;
   const keyboard = [
     [{ text: '🔍 Cari Karakter (Cosplay)', callback_data: 'menu_search_cosplay' }, { text: '🔍 Cari Karakter (R34)', callback_data: 'menu_search_r34' }],
+    [{ text: '🔍 Cari Anime (Pinterest)', callback_data: 'menu_search_pinterest' }],
     [{ text: '📚 Browse Cosplay', callback_data: 'menu_browse' }, { text: '🎲 Gacha Cosplay', callback_data: 'menu_gacha' }],
+    [{ text: '🌸 SFW Pinterest Gacha', callback_data: 'menu_sfw_gacha' }],
     [{ text: '🍁 Patreon Gacha', callback_data: 'menu_kemono_reroll' }],
-    [{ text: '📊 Profile', callback_data: 'menu_profile' }],
     [{ text: '🎬 R34 Video Browse', callback_data: 'menu_r34_browse' }, { text: '🎬 R34 Gacha', callback_data: 'menu_r34_gacha' }],
-    [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }]
+    [{ text: '📊 Profile', callback_data: 'menu_profile' }, { text: '📥 Manual Terabox DL', callback_data: 'menu_terabox' }],
+    [{ text: '🧹 Clear Chat', callback_data: 'menu_clear' }]
   ];
 
   if (String(chatId) === '6663343995') {
-    keyboard.splice(4, 0, [{ text: '💻 Dasbor Admin', callback_data: 'menu_vps' }]);
+    keyboard.splice(6, 0, [{ text: '💻 Dasbor Admin', callback_data: 'menu_vps' }]);
   }
 
   const sentMsg = await sendMenuWithThumb(bot, chatId, text, keyboard);
@@ -981,6 +1136,8 @@ function startBot() {
     { command: '/start', description: 'Buka Menu Utama' },
     { command: '/browse', description: 'Jelajahi Postingan Cosplay Terbaru' },
     { command: '/gacha', description: '🎲 Gacha Cosplay Random (Surprise Me)' },
+    { command: '/sfw', description: '🌸 Gacha Anime SFW (Pinterest)' },
+    { command: '/search_pinterest', description: '🔍 Cari Gambar Anime HQ di Pinterest' },
     { command: '/maple', description: '🍁 Gacha Patreon' },
     { command: '/r34', description: '🎬 Rule34 Video (Browse & Gacha)' },
     { command: '/search', description: 'Cari Karakter / Album Cosplay' },
@@ -1017,6 +1174,20 @@ function startBot() {
     const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
     log.info(`[User ${msg.chat.id}] Execute /maple Kemono Gacha (${pickedUrl})`);
     doKemonoGacha(bot, msg.chat.id, pickedUrl);
+  });
+
+  bot.onText(/^\/sfw(?:\s+(.+))?$/, (msg, match) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(() => { }); // Auto-clean
+    const query = match[1] || 'anime';
+    log.info(`[User ${msg.chat.id}] Execute /sfw Gacha (${query})`);
+    doSFWGacha(bot, msg.chat.id, query);
+  });
+
+  bot.onText(/^\/search_pinterest(?:\s+(.+))?$/, (msg, match) => {
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch(() => { });
+    const query = match[1] || 'anime';
+    log.info(`[User ${msg.chat.id}] Execute /search_pinterest (${query})`);
+    doPinterestSearch(bot, msg.chat.id, query);
   });
 
   bot.onText(/^\/r34(?:\s+(.+))?$/, async (msg, match) => {
@@ -1172,6 +1343,14 @@ function startBot() {
       return;
     }
 
+    // If awaiting Pinterest search
+    if (state && state.step === 'AWAITING_PINTEREST_SEARCH') {
+      userStates.delete(chatId);
+      log.info(`[User ${chatId}] Pencarian Pinterest: ${text}`);
+      doPinterestSearch(bot, chatId, text);
+      return;
+    }
+
     // Direct link paste
     if (text.includes('terabox.com') || text.includes('1024terabox.com')) {
       userStates.set(chatId, { step: 'AWAITING_SOURCE', url: text });
@@ -1250,6 +1429,70 @@ function startBot() {
       const urls = ['https://kemono.cr/patreon/user/3295915', 'https://kemono.cr/patreon/user/49965584'];
       const pickedUrl = urls[Math.floor(Math.random() * urls.length)];
       return doKemonoGacha(bot, chatId, pickedUrl);
+    }
+
+    // ── SFW Gacha Callbacks ──
+    if (action.startsWith('menu_sfw_reroll')) {
+      bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
+      const sfwQuery = action.split(':')[1] || 'anime';
+      return doSFWGacha(bot, chatId, sfwQuery);
+    }
+    
+    // ── Pinterest Search Detail Callback ──
+    if (action.startsWith('pin_detail_')) {
+      const idx = parseInt(action.split('_')[2]);
+      const cacheData = pinterestCache.get(chatId);
+      if (cacheData && cacheData.pins && cacheData.pins[idx]) {
+        // Hapus auto-preview MediaGroup 4 image (jika ada) saat detail diklik
+        if (cacheData.previewMsgIds && cacheData.previewMsgIds.length > 0) {
+          cacheData.previewMsgIds.forEach(mId => bot.deleteMessage(chatId, mId).catch(()=>{}));
+          cacheData.previewMsgIds = []; // clear from list
+        }
+        
+        // Hapus pesan menu juga agar rapi (karena sudah masuk layar detail)
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        
+        const pin = cacheData.pins[idx];
+        const caption = `📌 <b>${escHtml(pin.title)}</b>\n\n🔍 Search: <i>${escHtml(cacheData.query)}</i>\nSumber: Pinterest`;
+        
+        bot.answerCallbackQuery(query.id, { text: 'Memuat resolusi HD...' }).catch(()=>{});
+        
+        downloadPinterestImage(pin.imgUrl).then(async buffer => {
+          const sentDetail = await bot.sendPhoto(chatId, buffer, {
+            caption: caption,
+            parse_mode: 'HTML',
+            reply_markup: {
+               inline_keyboard: [
+                  [{ text: '🔙 Kembali ke List Pencarian', callback_data: 'pin_search_back' }]
+               ]
+            }
+          }).catch(err => {
+            log.error(`Gagal mengirim SFW detail: ${err.message}`);
+            bot.sendMessage(chatId, `❌ Gagal memuat full gambar: ${err.message}`).catch(()=>{});
+          });
+          
+          if(sentDetail) {
+            autoCleanOldMenu(bot, chatId, sentDetail.message_id); // simpan ke menu tracker
+          }
+        }).catch(err => {
+          bot.sendMessage(chatId, `❌ Gagal download dari Pinterest: ${err.message}`).catch(()=>{});
+        });
+      } else {
+        bot.answerCallbackQuery(query.id, { text: '⚠️ Sesi kadaluarsa. Silakan search ulang.', show_alert: true }).catch(()=>{});
+      }
+      return;
+    }
+    
+    // ── Pinterest Search Back Callback ──
+    if (action === 'pin_search_back') {
+       bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+       const cacheData = pinterestCache.get(chatId);
+       if (cacheData && cacheData.query) {
+           return doPinterestSearch(bot, chatId, cacheData.query, false); // false = jangan blast preview 4 image
+       } else {
+           bot.answerCallbackQuery(query.id, { text: '⚠️ Sesi kadaluarsa. Silakan cari lagi.', show_alert: true }).catch(()=>{});
+           return sendMainMenu(bot, chatId);
+       }
     }
 
     // ── Rule34Video Callbacks ──
@@ -1403,6 +1646,17 @@ function startBot() {
       const msg = await sendMenuWithThumb(bot, chatId, '📚 <b>Pencarian Cosplaytele</b>\n\nSilakan ketik nama karakter, cosplayer, atau judul di kolom chat:', [[{ text: '🔙 Batal', callback_data: 'menu_awal' }]]);
       autoCleanOldMenu(bot, chatId, msg.message_id);
       return;
+    }
+    if (action === 'menu_search_pinterest') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
+      userStates.set(chatId, { step: 'AWAITING_PINTEREST_SEARCH' });
+      const msg = await sendMenuWithThumb(bot, chatId, '🔍 <b>Pencarian Pinterest</b>\n\nKetik kata kunci gambar anime yang dicari (contoh: <code>anime scenery</code>):', [[{ text: '🔙 Batal', callback_data: 'menu_awal' }]]);
+      autoCleanOldMenu(bot, chatId, msg.message_id);
+      return;
+    }
+    if (action === 'menu_sfw_gacha') {
+      bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
+      return doSFWGacha(bot, chatId);
     }
     if (action === 'menu_search_r34') {
       bot.deleteMessage(chatId, query.message.message_id).catch(() => { });

@@ -106,6 +106,8 @@ npx pm2 restart costelebot
 | `/browse` | Jelajahi postingan Cosplaytele terbaru |
 | `/search <query>` | Cari karakter/cosplayer di Cosplaytele |
 | `/gacha` | 🎲 Gacha Cosplay acak (Surprise Me!) |
+| `/sfw` | 🌸 Gacha gambar anime SFW HD dari Pinterest |
+| `/search_pinterest` | 🔍 Cari gambar anime HD di Pinterest |
 | `/maple` | 🍁 Gacha Patreon eksklusif dari Kemono.cr |
 | `/r34` | 🎬 Menu Rule34Video (Browse, Search, Gacha) |
 | `/r34 <tag>` | 🎬 Cari video Rule34 berdasarkan tag |

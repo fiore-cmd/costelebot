@@ -752,6 +752,17 @@ async function downloadPinterestImage(url) {
 
 // ─── SFW PINTEREST HANDLERS ──────────────────────────────────────────────────
 async function doSFWGacha(bot, chatId, query = 'anime') {
+  let actualQuery = query;
+  // Variasi keyword agar Pinterest selalu memberikan hasil baru dan segar
+  if (query === 'anime') {
+    const animeQueries = [
+      "anime aesthetic", "anime wallpaper hd", "anime art", "anime illustration", 
+      "anime girl aesthetic", "anime scenery", "anime icon", "anime boy aesthetic", 
+      "anime fanart", "anime cute"
+    ];
+    actualQuery = animeQueries[Math.floor(Math.random() * animeQueries.length)];
+  }
+
   const gMsg = await bot.sendMessage(chatId, `🌸 <b>SFW Gacha...</b>\n<i>Menelusuri Pinterest...</i>`, { parse_mode: 'HTML' });
   statsDb.addGacha(chatId);
 
@@ -761,18 +772,24 @@ async function doSFWGacha(bot, chatId, query = 'anime') {
 
   try {
     let pins;
-    const cacheData = pinterestScrapeCache.get(query);
+    const cacheData = pinterestScrapeCache.get(actualQuery);
     if (cacheData && Date.now() - cacheData.timestamp < 1000 * 60 * 60) {
       pins = cacheData.pins; // Hit Cache (Instant reload)
     } else {
-      pins = await pinterestScraper.scrapePinterest(query);
-      pinterestScrapeCache.set(query, { pins, timestamp: Date.now() });
+      pins = await pinterestScraper.scrapePinterest(actualQuery);
+      pinterestScrapeCache.set(actualQuery, { pins, timestamp: Date.now() });
     }
 
     if (!pins || pins.length === 0) throw new Error("Kosong");
 
     // Filter yang belum pernah dilihat user
     let unseenPins = pins.filter(p => !historyTracker.hasSeen(chatId, 'pinterest', p.imgUrl));
+    
+    // Jika stok pin baru sudah mau habis di Cache ini, hapus cache agar next user forced re-scrape
+    if (unseenPins.length < 5) {
+      pinterestScrapeCache.delete(actualQuery);
+    }
+
     if (unseenPins.length === 0) {
       // Jika semua sudah dilihat, ambil sembarang dari semua
       unseenPins = pins;

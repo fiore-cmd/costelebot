@@ -823,7 +823,7 @@ async function doSFWGacha(bot, chatId, query = 'anime') {
 
   } catch (error) {
     log.error('SFW Gacha gagal: ' + error.message);
-    bot.editMessageText(`❌ Error SFW Gacha: ${error.message}`, { chat_id: chatId, message_id: gMsg.message_id }).catch(() => {});
+    bot.editMessageText(`❌ Gagal mengambil gambar dari server Pinterest, antrean sedang padat. Silakan coba sesaat lagi!`, { chat_id: chatId, message_id: gMsg.message_id }).catch(() => {});
   }
 }
 
@@ -897,7 +897,8 @@ async function doPinterestSearch(bot, chatId, query, showPreview = true) {
     await autoCleanOldMenu(bot, chatId, menuMsg.message_id);
 
   } catch (err) {
-    bot.editMessageText(`❌ Gagal: ${err.message}`, { chat_id: chatId, message_id: loadMsg.message_id }).catch(() => { });
+    log.error('Pencarian Pinterest gagal: ' + err.message);
+    bot.editMessageText(`❌ Pencarian gagal. Server sedang sibuk atau melarang akses. Coba lagi perlahan.`, { chat_id: chatId, message_id: loadMsg.message_id }).catch(() => { });
   }
 }
 
@@ -1485,14 +1486,15 @@ function startBot() {
             }
           }).catch(err => {
             log.error(`Gagal mengirim SFW detail: ${err.message}`);
-            bot.sendMessage(chatId, `❌ Gagal memuat full gambar: ${err.message}`).catch(()=>{});
+            bot.sendMessage(chatId, `❌ Gagal memuat gambar utuh (koneksi ditolak Telegram).`).catch(()=>{});
           });
           
           if(sentDetail) {
             autoCleanOldMenu(bot, chatId, sentDetail.message_id); // simpan ke menu tracker
           }
         }).catch(err => {
-          bot.sendMessage(chatId, `❌ Gagal download dari Pinterest: ${err.message}`).catch(()=>{});
+          log.error(`Gagal download Pinterest Buffer: ${err.message}`);
+          bot.sendMessage(chatId, `❌ Gagal mengunduh gambar aslinya dari server Pinterest.`).catch(()=>{});
         });
       } else {
         bot.answerCallbackQuery(query.id, { text: '⚠️ Sesi kadaluarsa. Silakan search ulang.', show_alert: true }).catch(()=>{});

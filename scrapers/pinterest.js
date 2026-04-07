@@ -11,8 +11,12 @@ async function scrapePinterest(query = 'anime') {
     // Masuk ke pinterest search
     await page.goto(`https://id.pinterest.com/search/pins/?q=${encodedQuery}`, { waitUntil: 'load', timeout: 35000 });
     
-    // Tunggu gambarnya render
-    await page.waitForSelector('img[src*="i.pinimg.com"]', { timeout: 15000 });
+    // Tunggu gambarnya render (Gunakan try-catch agar tidak crash if timeout)
+    try {
+      await page.waitForSelector('img[src*="pinimg.com"]', { timeout: 20000 });
+    } catch(e) {
+      // Abaikan timeout, coba proceed saja, siapa tahu gambar telat dimuat
+    }
     
     // Scroll sebentar agar lebih banyak gambar terekstrak
     for (let i=0; i<3; i++) {
@@ -21,7 +25,7 @@ async function scrapePinterest(query = 'anime') {
     }
 
     const pins = await page.evaluate(() => {
-      const imgs = Array.from(document.querySelectorAll('img[src*="i.pinimg.com"]'));
+      const imgs = Array.from(document.querySelectorAll('img[src*="pinimg.com"]'));
       return imgs
         .filter(img => img.src.endsWith('.jpg') || img.src.endsWith('.png') || img.src.endsWith('.webp'))
         .map(img => {

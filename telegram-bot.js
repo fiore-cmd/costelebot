@@ -807,8 +807,8 @@ async function doSFWGacha(bot, chatId, query = 'anime') {
     
     // Download manual via Axios agar tidak 400 Bad Request di Telegram
     const imageBuffer = await downloadPinterestImage(picked.imgUrl);
-
-    const sentMsg = await bot.sendPhoto(chatId, imageBuffer, {
+    
+    const messageOpts = {
       caption: caption,
       parse_mode: 'HTML',
       reply_markup: {
@@ -817,7 +817,18 @@ async function doSFWGacha(bot, chatId, query = 'anime') {
           [{ text: '🔙 Menu Utama', callback_data: 'menu_awal' }]
         ]
       }
-    });
+    };
+
+    let sentMsg;
+    try {
+      sentMsg = await bot.sendPhoto(chatId, imageBuffer, messageOpts);
+    } catch (photoErr) {
+      if (photoErr.message.includes('DIMENSIONS') || photoErr.message.includes('size')) {
+        sentMsg = await bot.sendDocument(chatId, imageBuffer, messageOpts, { filename: 'pinterest_gacha.jpg', contentType: 'image/jpeg' });
+      } else {
+        throw photoErr;
+      }
+    }
 
     sfwTracker.set(chatId, sentMsg.message_id);
 
@@ -862,8 +873,13 @@ async function doPinterestSearch(bot, chatId, query, showPreview = true) {
         media: buffers[idx] ? buffers[idx] : pin.imgUrl
       }));
       
-      const sentGroup = await bot.sendMediaGroup(chatId, mediaGroup);
-      previewMsgIds = sentGroup.map(m => m.message_id);
+      try {
+        const sentGroup = await bot.sendMediaGroup(chatId, mediaGroup);
+        previewMsgIds = sentGroup.map(m => m.message_id);
+      } catch (err) {
+        log.error("Preview MediaGroup gagal: " + err.message);
+        // Abaikan preview jika error dimensi, list text tetap dikirim
+      }
     }
 
     // Simpan di cache untuk Detail Button & Auto-Clear Preview
@@ -1476,7 +1492,7 @@ function startBot() {
         bot.answerCallbackQuery(query.id, { text: 'Memuat resolusi HD...' }).catch(()=>{});
         
         downloadPinterestImage(pin.imgUrl).then(async buffer => {
-          const sentDetail = await bot.sendPhoto(chatId, buffer, {
+          const msgOpts = {
             caption: caption,
             parse_mode: 'HTML',
             reply_markup: {
@@ -1484,10 +1500,19 @@ function startBot() {
                   [{ text: '🔙 Kembali ke List Pencarian', callback_data: 'pin_search_back' }]
                ]
             }
-          }).catch(err => {
-            log.error(`Gagal mengirim SFW detail: ${err.message}`);
-            bot.sendMessage(chatId, `❌ Gagal memuat gambar utuh (koneksi ditolak Telegram).`).catch(()=>{});
-          });
+          };
+          
+          let sentDetail;
+          try {
+            sentDetail = await bot.sendPhoto(chatId, buffer, msgOpts);
+          } catch(err) {
+            if (err.message.includes('DIMENSIONS') || err.message.includes('size')) {
+               sentDetail = await bot.sendDocument(chatId, buffer, msgOpts, { filename: 'pinterest_hd.jpg', contentType: 'image/jpeg' });
+            } else {
+               log.error(`Gagal mengirim SFW detail: ${err.message}`);
+               bot.sendMessage(chatId, `❌ Gagal memuat gambar utuh (koneksi ditolak Telegram).`).catch(()=>{});
+            }
+          }
           
           if(sentDetail) {
             autoCleanOldMenu(bot, chatId, sentDetail.message_id); // simpan ke menu tracker
